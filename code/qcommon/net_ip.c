@@ -73,7 +73,7 @@ static qboolean	winsockInitialized = qfalse;
 #	include <sys/types.h>
 #	include <sys/time.h>
 #	include <unistd.h>
-#	if !defined(__sun) && !defined(__sgi)
+#	if !defined(__sun) && !defined(__sgi) && !defined(__amigaos4__)
 #		include <ifaddrs.h>
 #	endif
 
@@ -118,10 +118,12 @@ static SOCKET	ip6_socket = INVALID_SOCKET;
 static SOCKET	socks_socket = INVALID_SOCKET;
 static SOCKET	multicast6_socket = INVALID_SOCKET;
 
+#ifndef __amigaos4__
 // Keep track of currently joined multicast group.
 static struct ipv6_mreq curgroup;
 // And the currently bound address.
 static struct sockaddr_in6 boundto;
+#endif
 
 #ifndef IF_NAMESIZE
   #define IF_NAMESIZE 16
@@ -138,12 +140,77 @@ typedef struct
 	
 	netadrtype_t type;
 	sa_family_t family;
+#ifdef __amigaos4__
+    struct sockaddr addr;
+    struct sockaddr netmask;
+#else
 	struct sockaddr_storage addr;
 	struct sockaddr_storage netmask;
+#endif
 } nip_localaddr_t;
 
 static nip_localaddr_t localIP[MAX_IPS];
 static int numIP;
+
+#ifdef __amigaos4__
+/*
+ *  Desired design of maximum size and alignment.
+ */
+#define _SS_MAXSIZE 128
+	/* Implementation-defined maximum size. */
+#define _SS_ALIGNSIZE (sizeof(int64_t))
+	/* Implementation-defined desired alignment. */
+
+
+/*
+ *  Definitions used for sockaddr_storage structure paddings design.
+ */
+#define _SS_PAD1SIZE (_SS_ALIGNSIZE - sizeof(sa_family_t))
+#define _SS_PAD2SIZE (_SS_MAXSIZE - (sizeof(sa_family_t)+ \
+					  _SS_PAD1SIZE + _SS_ALIGNSIZE))
+struct sockaddr_storage {
+	sa_family_t  ss_family;  /* Address family. */
+/*
+ *  Following fields are implementation-defined.
+ */
+	char _ss_pad1[_SS_PAD1SIZE];
+		/* 6-byte pad; this is to make implementation-defined
+		   pad up to alignment field that follows explicit in
+		   the data structure. */
+	int64_t _ss_align;  /* Field to force desired structure
+						   storage alignment. */
+	char _ss_pad2[_SS_PAD2SIZE];
+		/* 112-byte pad to achieve desired size,
+		   _SS_MAXSIZE value minus size of ss_family
+		   __ss_pad1, __ss_align fields is 112. */
+};
+
+struct addrinfo {
+	int ai_flags;
+	int ai_family;
+	int ai_socktype;
+	int ai_protocol;
+	socklen_t ai_addrlen;
+	struct sockaddr *ai_addr;
+	char *ai_canonname;
+	struct addrinfo *ai_next;
+};
+
+#define NI_NUMERICHOST 1
+
+#define EAI_NONAME 1
+
+char * gai_strerror(int retval);
+
+int getaddrinfo(const char * nodename, const char * servname, const struct addrinfo * hints, struct addrinfo **res);
+
+void freeaddrinfo(struct addrinfo *ai);
+
+int getnameinfo(const struct sockaddr *sa, socklen_t salen, char *node, socklen_t nodelen, char * service,
+	socklen_t servicelen, int flags);
+
+#endif
+
 
 
 //=============================================================================
@@ -220,6 +287,7 @@ static void NetadrToSockadr( netadr_t *a, struct sockaddr *s ) {
 		((struct sockaddr_in *)s)->sin_addr.s_addr = *(int *)&a->ip;
 		((struct sockaddr_in *)s)->sin_port = a->port;
 	}
+#ifndef __amigaos4__
 	else if( a->type == NA_IP6 ) {
 		((struct sockaddr_in6 *)s)->sin6_family = AF_INET6;
 		((struct sockaddr_in6 *)s)->sin6_addr = * ((struct in6_addr *) &a->ip6);
@@ -232,6 +300,7 @@ static void NetadrToSockadr( netadr_t *a, struct sockaddr *s ) {
 		((struct sockaddr_in6 *)s)->sin6_addr = curgroup.ipv6mr_multiaddr;
 		((struct sockaddr_in6 *)s)->sin6_port = a->port;
 	}
+#endif
 }
 
 
@@ -241,6 +310,7 @@ static void SockadrToNetadr( struct sockaddr *s, netadr_t *a ) {
 		*(int *)&a->ip = ((struct sockaddr_in *)s)->sin_addr.s_addr;
 		a->port = ((struct sockaddr_in *)s)->sin_port;
 	}
+#ifndef __amigaos4__
 	else if(s->sa_family == AF_INET6)
 	{
 		a->type = NA_IP6;
@@ -248,6 +318,7 @@ static void SockadrToNetadr( struct sockaddr *s, netadr_t *a ) {
 		a->port = ((struct sockaddr_in6 *)s)->sin6_port;
 		a->scope_id = ((struct sockaddr_in6 *)s)->sin6_scope_id;
 	}
+#endif
 }
 
 
@@ -291,11 +362,12 @@ static qboolean Sys_StringToSockaddr(const char *s, struct sockaddr *sadr, int s
 		if(family == AF_UNSPEC)
 		{
 			// Decide here and now which protocol family to use
+#ifndef __amigaos4__
 			if(net_enabled->integer & NET_PRIOV6)
 			{
 				if(net_enabled->integer & NET_ENABLEV6)
 					search = SearchAddrInfo(res, AF_INET6);
-				
+			
 				if(!search && (net_enabled->integer & NET_ENABLEV4))
 					search = SearchAddrInfo(res, AF_INET);
 			}
@@ -307,6 +379,9 @@ static qboolean Sys_StringToSockaddr(const char *s, struct sockaddr *sadr, int s
 				if(!search && (net_enabled->integer & NET_ENABLEV6))
 					search = SearchAddrInfo(res, AF_INET6);
 			}
+#else
+			search = SearchAddrInfo(res, AF_INET);
+#endif
 		}
 		else
 			search = SearchAddrInfo(res, family);
@@ -342,9 +417,11 @@ static void Sys_SockaddrToString(char *dest, int destlen, struct sockaddr *input
 {
 	socklen_t inputlen;
 
+#ifndef __amigaos4__
 	if (input->sa_family == AF_INET6)
 		inputlen = sizeof(struct sockaddr_in6);
 	else
+#endif
 		inputlen = sizeof(struct sockaddr_in);
 
 	if(getnameinfo(input, inputlen, dest, destlen, NULL, 0, NI_NUMERICHOST) && destlen > 0)
@@ -365,9 +442,11 @@ qboolean Sys_StringToAdr( const char *s, netadr_t *a, netadrtype_t family ) {
 		case NA_IP:
 			fam = AF_INET;
 		break;
+#ifndef __amigaos4__
 		case NA_IP6:
 			fam = AF_INET6;
 		break;
+#endif
 		default:
 			fam = AF_UNSPEC;
 		break;
@@ -406,6 +485,7 @@ qboolean NET_CompareBaseAdrMask(netadr_t a, netadr_t b, int netmask)
 		if(netmask < 0 || netmask > 32)
 			netmask = 32;
 	}
+#ifndef __amigaos4__
 	else if(a.type == NA_IP6)
 	{
 		addra = (byte *) &a.ip6;
@@ -414,6 +494,7 @@ qboolean NET_CompareBaseAdrMask(netadr_t a, netadr_t b, int netmask)
 		if(netmask < 0 || netmask > 128)
 			netmask = 128;
 	}
+#endif
 	else
 	{
 		Com_Printf ("NET_CompareBaseAdr: bad address type\n");
@@ -483,8 +564,10 @@ const char	*NET_AdrToStringwPort (netadr_t a)
 		Com_sprintf (s, sizeof(s), "bot");
 	else if(a.type == NA_IP)
 		Com_sprintf(s, sizeof(s), "%s:%hu", NET_AdrToString(a), ntohs(a.port));
+#ifndef __amigaos4__
 	else if(a.type == NA_IP6)
 		Com_sprintf(s, sizeof(s), "[%s]:%hu", NET_AdrToString(a), ntohs(a.port));
+#endif
 
 	return s;
 }
@@ -495,7 +578,11 @@ qboolean	NET_CompareAdr (netadr_t a, netadr_t b)
 	if(!NET_CompareBaseAdr(a, b))
 		return qfalse;
 	
-	if (a.type == NA_IP || a.type == NA_IP6)
+	if (a.type == NA_IP
+#ifndef __amigaos4__
+		|| a.type == NA_IP6
+#endif
+	)
 	{
 		if (a.port == b.port)
 			return qtrue;
@@ -675,8 +762,10 @@ void Sys_SendPacket( int length, const void *data, netadr_t to ) {
 	else {
 		if(addr.ss_family == AF_INET)
 			ret = sendto( ip_socket, data, length, 0, (struct sockaddr *) &addr, sizeof(struct sockaddr_in) );
+#ifndef __amigaos4__
 		else if(addr.ss_family == AF_INET6)
 			ret = sendto( ip6_socket, data, length, 0, (struct sockaddr *) &addr, sizeof(struct sockaddr_in6) );
+#endif
 	}
 	if( ret == SOCKET_ERROR ) {
 		int err = socketError;
@@ -751,6 +840,7 @@ qboolean Sys_IsLANAddress( netadr_t adr ) {
 				
 				addrsize = sizeof(adr.ip);
 			}
+#ifndef __amigaos4__
 			else
 			{
 				// TODO? should we check the scope_id here?
@@ -761,7 +851,7 @@ qboolean Sys_IsLANAddress( netadr_t adr ) {
 				
 				addrsize = sizeof(adr.ip6);
 			}
-
+#endif
 			differed = qfalse;
 			for(run = 0; run < addrsize; run++)
 			{
@@ -878,6 +968,7 @@ SOCKET NET_IPSocket( char *net_interface, int port, int *err ) {
 NET_IP6Socket
 ====================
 */
+#ifndef __amigaos4__
 SOCKET NET_IP6Socket( char *net_interface, int port, struct sockaddr_in6 *bindto, int *err ) {
 	SOCKET				newsocket;
 	struct sockaddr_in6	address;
@@ -955,6 +1046,7 @@ SOCKET NET_IP6Socket( char *net_interface, int port, struct sockaddr_in6 *bindto
 
 	return newsocket;
 }
+#endif
 
 /*
 ====================
@@ -962,6 +1054,7 @@ NET_SetMulticast
 Set the current multicast group
 ====================
 */
+#ifndef __amigaos4__
 void NET_SetMulticast6(void)
 {
 	struct sockaddr_in6 addr;
@@ -989,6 +1082,7 @@ void NET_SetMulticast6(void)
 	else
 		curgroup.ipv6mr_interface = 0;
 }
+#endif
 
 /*
 ====================
@@ -996,6 +1090,7 @@ NET_JoinMulticast
 Join an ipv6 multicast group
 ====================
 */
+#ifndef __amigaos4__
 void NET_JoinMulticast6(void)
 {
 	int err;
@@ -1058,6 +1153,7 @@ void NET_LeaveMulticast6()
 		multicast6_socket = INVALID_SOCKET;
 	}
 }
+#endif
 
 /*
 ====================
@@ -1249,11 +1345,13 @@ static void NET_AddLocalAddress(char *ifname, struct sockaddr *addr, struct sock
 			addrlen = sizeof(struct sockaddr_in);
 			localIP[numIP].type = NA_IP;
 		}
+#ifndef __amigaos4__
 		else if(family == AF_INET6)
 		{
 			addrlen = sizeof(struct sockaddr_in6);
 			localIP[numIP].type = NA_IP6;
 		}
+#endif
 		else
 			return;
 		
@@ -1312,26 +1410,32 @@ static void NET_GetLocalAddress( void ) {
 	if(!getaddrinfo(hostname, NULL, &hint, &res))
 	{
 		struct sockaddr_in mask4;
+#ifndef __amigaos4__
 		struct sockaddr_in6 mask6;
+#endif
 		struct addrinfo *search;
 	
 		/* On operating systems where it's more difficult to find out the configured interfaces, we'll just assume a
 		 * netmask with all bits set. */
 	
 		memset(&mask4, 0, sizeof(mask4));
-		memset(&mask6, 0, sizeof(mask6));
 		mask4.sin_family = AF_INET;
 		memset(&mask4.sin_addr.s_addr, 0xFF, sizeof(mask4.sin_addr.s_addr));
+
+#ifndef __amigaos4__
+		memset(&mask6, 0, sizeof(mask6));
 		mask6.sin6_family = AF_INET6;
 		memset(&mask6.sin6_addr, 0xFF, sizeof(mask6.sin6_addr));
-
+#endif
 		// add all IPs from returned list.
 		for(search = res; search; search = search->ai_next)
 		{
 			if(search->ai_family == AF_INET)
 				NET_AddLocalAddress("", search->ai_addr, (struct sockaddr *) &mask4);
+#ifndef __amigaos4__
 			else if(search->ai_family == AF_INET6)
 				NET_AddLocalAddress("", search->ai_addr, (struct sockaddr *) &mask6);
+#endif
 		}
 	
 		Sys_ShowIP();
@@ -1361,7 +1465,7 @@ void NET_OpenIP( void ) {
 	// automatically scan for a valid port, so multiple
 	// dedicated servers can be started without requiring
 	// a different net_port for each one
-
+#ifndef __amigaos4__
 	if(net_enabled->integer & NET_ENABLEV6)
 	{
 		for( i = 0 ; i < 10 ; i++ )
@@ -1381,6 +1485,7 @@ void NET_OpenIP( void ) {
 		if(ip6_socket == INVALID_SOCKET)
 			Com_Printf( "WARNING: Couldn't bind to a v6 ip address.\n");
 	}
+#endif
 
 	if(net_enabled->integer & NET_ENABLEV4)
 	{
@@ -1559,7 +1664,9 @@ void NET_Config( qboolean enableNetworking ) {
 		if (net_enabled->integer)
 		{
 			NET_OpenIP();
+#ifndef __amigaos4__
 			NET_SetMulticast6();
+#endif
 		}
 	}
 }
@@ -1707,3 +1814,132 @@ void NET_Restart_f(void)
 {
 	NET_Config(qtrue);
 }
+
+#ifdef __amigaos4__
+
+char * gai_strerror(int retval)
+{
+	return "Error within getaddrinfo (it's all capehill's fault)";
+}
+
+int getaddrinfo(const char * nodename, const char * servname, const struct addrinfo * hints, struct addrinfo **res)
+{
+	//Com_Printf("getaddrinfo nodename: '%s'\n", nodename);
+
+	*res = NULL;
+
+	if (!nodename || !res)
+	{
+		return 1;
+	}
+
+	struct hostent * he = gethostbyname(nodename);
+
+	if (he)
+	{
+		if (he->h_addrtype != AF_INET)
+		{
+			return 1;
+		}
+
+		*res = malloc(sizeof(struct addrinfo));
+
+		if (*res)
+		{
+			struct sockaddr_in * sin = malloc(sizeof(struct sockaddr_in));
+
+			if (sin)
+			{
+				memset(*res, 0, sizeof(struct addrinfo));
+
+				(*res)->ai_family = PF_INET;
+
+				memcpy(&(sin->sin_addr), he->h_addr, he->h_length + 1);
+
+				(*res)->ai_addr = (struct sockaddr *) sin;
+				(*res)->ai_addrlen = sizeof(struct sockaddr_in);
+
+				sin->sin_family = AF_INET;
+
+				//Com_Printf("%s sin_addr: '%s'\n", __FUNCTION__, inet_ntoa( sin->sin_addr ) );
+
+				return 0;
+			}
+			else
+			{
+				free( *res );
+				*res = NULL;
+			}
+		}
+	}
+
+	return 1;
+}
+
+void freeaddrinfo(struct addrinfo *ai)
+{
+	//Com_Printf("freeaddrinfo\n");
+
+	if (ai)
+	{
+		if (ai->ai_addr)
+		{
+			free(ai->ai_addr);
+		}
+/*
+		if (ai->ai_canonname)
+		{
+			free(ai->ai_canonname);
+		}
+
+		if (ai->ai_next)
+		{
+			freeaddrinfo(ai->ai_next);
+		}
+*/
+		free(ai);
+	}
+}
+
+int getnameinfo(const struct sockaddr *sa, socklen_t salen, char *node, socklen_t nodelen, char * service,
+	socklen_t servicelen, int flags)
+{
+	struct sockaddr_in * sin = NULL;
+	char buf[32];
+
+	if ((node == NULL) || (nodelen == 0))
+	{
+		return 0;
+	}
+
+	if ((sa == NULL) || (salen == 0))
+	{
+		return EAI_NONAME;
+	}
+
+	//Com_Printf("getnameinfo: family %d passed\n", sa->sa_family);
+
+	if (sa->sa_family != AF_INET)
+	{
+		return EAI_NONAME;
+	}
+
+	sin = (struct sockaddr_in *) sa;
+
+	strncpy(buf, inet_ntoa(sin->sin_addr), 31);
+
+	//Com_Printf("DEBUG: buf is '%s'", buf);
+
+	if ((strlen(buf) <= nodelen) && (strlen(buf) < sizeof(buf)))
+	{
+		strncpy(node, buf, strlen(buf) + 1);
+
+		//Com_Printf("%s node '%s'\n", __FUNCTION__, node);
+
+		return 0;
+	}
+
+	return EAI_NONAME;
+}
+
+#endif
