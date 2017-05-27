@@ -69,6 +69,18 @@ void GLimp_Shutdown( void )
 {
 	ri.IN_Shutdown();
 
+	if( SDL_glContext != NULL )
+	{
+		SDL_GL_DeleteContext( SDL_glContext );
+		SDL_glContext = NULL;
+	}
+
+	if( SDL_window != NULL )
+	{
+		SDL_DestroyWindow( SDL_window );
+		SDL_window = NULL;
+	}
+
 	SDL_QuitSubSystem( SDL_INIT_VIDEO );
 }
 
