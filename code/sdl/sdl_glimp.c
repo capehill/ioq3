@@ -697,8 +697,12 @@ static void GLimp_InitExtensions( void )
 		ri.Printf( PRINT_ALL, "...GL_ARB_multitexture not found\n" );
 	}
 
+#ifdef __amigaos4__ // MiniGL issue
+	if ( SDL_GL_ExtensionSupported( "GL_EXT_compiled_vertex_arrays" ) )
+#else
 	// GL_EXT_compiled_vertex_array
 	if ( SDL_GL_ExtensionSupported( "GL_EXT_compiled_vertex_array" ) )
+#endif
 	{
 		if ( r_ext_compiled_vertex_array->value )
 		{
