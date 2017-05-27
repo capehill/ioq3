@@ -21,7 +21,11 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include <sys/types.h> /* needed by sys/mman.h on OSX */
+#ifdef __amigaos4__
+#include <proto/exec.h>
+#else
 #include <sys/mman.h>
+#endif
 #include <sys/time.h>
 #include <time.h>
 #include <stddef.h>
@@ -1811,6 +1815,16 @@ PPC_ComputeCode( vm_t *vm )
 		+ sizeof( unsigned int ) * data_acc
 		+ sizeof( ppc_instruction_t ) * codeInstructions;
 
+#ifdef __amigaos4__
+	unsigned char *dataAndCode = IExec->AllocVecTags(codeLength,
+		AVT_Type, MEMF_EXECUTABLE,
+		AVT_ClearWithValue, 0,
+		TAG_DONE);
+
+	if (!dataAndCode) {
+		DIE( "Not enough memory" );
+	}
+#else
 	// get the memory for the generated code, smarter ppcs need the
 	// mem to be marked as executable (whill change later)
 	unsigned char *dataAndCode = mmap( NULL, codeLength,
@@ -1818,6 +1832,7 @@ PPC_ComputeCode( vm_t *vm )
 
 	if (dataAndCode == MAP_FAILED)
 		DIE( "Not enough memory" );
+#endif
 
 	ppc_instruction_t *codeNow, *codeBegin;
 	codeNow = codeBegin = (ppc_instruction_t *)( dataAndCode + VM_Data_Offset( data[ data_acc ] ) );
@@ -1967,8 +1982,13 @@ static void
 VM_Destroy_Compiled( vm_t *self )
 {
 	if ( self->codeBase ) {
+#ifdef __amigaos4__
+		Com_Printf( "VM_Destroy_Compiled at %p\n", self->codeBase );
+		IExec->FreeVec( self->codeBase );
+#else
 		if ( munmap( self->codeBase, self->codeLength ) )
 			Com_Printf( S_COLOR_RED "Memory unmap failed, possible memory leak\n" );
+#endif
 	}
 	self->codeBase = NULL;
 }
@@ -2059,6 +2079,7 @@ VM_Compile( vm_t *vm, vmHeader_t *header )
 			Com_Printf( S_COLOR_RED "Pointer %ld not initialized !\n", i );
 #endif
 
+#ifndef __amigaos4__
 	/* mark memory as executable and not writeable */
 	if ( mprotect( vm->codeBase, vm->codeLength, PROT_READ|PROT_EXEC ) ) {
 
@@ -2066,6 +2087,7 @@ VM_Compile( vm_t *vm, vmHeader_t *header )
 		VM_Destroy_Compiled( vm );
 		DIE( "mprotect failed" );
 	}
+#endif
 
 	vm->destroy = VM_Destroy_Compiled;
 	vm->compiled = qtrue;
