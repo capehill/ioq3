@@ -232,6 +232,8 @@ ifndef DEBUG_CFLAGS
 DEBUG_CFLAGS=-ggdb -O0
 endif
 
+PASSIVE_CON=false
+
 #############################################################################
 
 BD=$(BUILD_DIR)/debug-$(PLATFORM)-$(ARCH)
@@ -297,14 +299,15 @@ endif
 
 # Add git version info
 USE_GIT=
-ifeq ($(wildcard .git),.git)
-  GIT_REV=$(shell git show -s --pretty=format:%h-%ad --date=short)
-  ifneq ($(GIT_REV),)
-    VERSION:=$(VERSION)_GIT_$(GIT_REV)
-    USE_GIT=1
+ifneq ($(PLATFORM),AMIGAOS)
+  ifeq ($(wildcard .git),.git)
+    GIT_REV=$(shell git show -s --pretty=format:%h-%ad --date=short)
+    ifneq ($(GIT_REV),)
+      VERSION:=$(VERSION)_GIT_$(GIT_REV)
+      USE_GIT=1
+    endif
   endif
 endif
-
 
 #############################################################################
 # SETUP AND BUILD -- LINUX
@@ -886,6 +889,35 @@ ifeq ($(PLATFORM),sunos)
 else # ifeq sunos
 
 #############################################################################
+# AMIGA
+#############################################################################
+
+ifeq ($(PLATFORM),AMIGAOS)
+
+  CC=gcc
+  BASE_CFLAGS = -Wall -fno-strict-aliasing -Wimplicit -Wstrict-prototypes #-pipe -DUSE_ICON
+  CLIENT_CFLAGS += -I/SDK/local/newlib/include/SDL2 #$(SDL_CFLAGS)
+
+  BASE_CFLAGS=
+
+  OPTIMIZEVM = -O3 -funroll-loops
+
+  OPTIMIZE = $(OPTIMIZEVM) -ffast-math
+
+  HAVE_VM_COMPILED=true
+
+  SHLIBEXT=so
+  SHLIBCFLAGS=-fPIC
+  SHLIBLDFLAGS=-shared
+
+  LIBS=-use-dynld -lSDL2 -lpthread -lauto
+
+  PASSIVE_CON=true
+
+else # ifeq amigaos
+
+
+#############################################################################
 # SETUP AND BUILD -- GENERIC
 #############################################################################
   BASE_CFLAGS=
@@ -903,6 +935,7 @@ endif #OpenBSD
 endif #NetBSD
 endif #IRIX
 endif #SunOS
+endif #AmigaOS
 
 ifndef CC
   CC=gcc
@@ -1266,10 +1299,14 @@ print_list=-@for i in $(1); \
              echo "    $$i"; \
      done
 
-ifneq ($(call bin_path, fmt),)
-  print_wrapped=@echo $(1) | fmt -w $(TERM_COLUMNS) | sed -e "s/^\(.*\)$$/    \1/"
+ifeq ($(PLATFORM),AMIGAOS)
+  print_wrapped=$(print_list) # some issue with fmt?
 else
-  print_wrapped=$(print_list)
+  ifneq ($(call bin_path, fmt),)
+    print_wrapped=@echo $(1) | fmt -w $(TERM_COLUMNS) | sed -e "s/^\(.*\)$$/    \1/"
+  else
+    print_wrapped=$(print_list)
+  endif
 endif
 
 # Create the build directories, check libraries and print out
@@ -1656,6 +1693,10 @@ Q3OBJ = \
   $(B)/client/sys_main.o
 
 ifdef MINGW
+  PASSIVE_CON=true
+endif
+
+ifeq ($(PASSIVE_CON),true)
   Q3OBJ += \
     $(B)/client/con_passive.o
 else
