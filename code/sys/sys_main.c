@@ -47,6 +47,10 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "../qcommon/q_shared.h"
 #include "../qcommon/qcommon.h"
 
+#ifdef __amigaos4__
+static const char stackCookie[] __attribute__((used)) = "$STACK:1000000";
+#endif
+
 static char binaryPath[ MAX_OSPATH ] = { 0 };
 static char installPath[ MAX_OSPATH ] = { 0 };
 
@@ -516,11 +520,14 @@ void *Sys_LoadDll(const char *name, qboolean useSystemLib)
 		int len;
 
 		topDir = Sys_BinaryPath();
-
+#ifdef __amigaos4__
+		len = Com_sprintf(libPath, sizeof(libPath), "%s", name);
+#else
 		if(!*topDir)
 			topDir = ".";
 
 		len = Com_sprintf(libPath, sizeof(libPath), "%s%c%s", topDir, PATH_SEP, name);
+#endif
 		if(len < sizeof(libPath))
 		{
 			Com_Printf("Trying to load \"%s\" from \"%s\"...\n", name, topDir);
