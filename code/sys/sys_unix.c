@@ -31,13 +31,16 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdio.h>
 #include <dirent.h>
 #include <unistd.h>
-#include <sys/mman.h>
 #include <sys/time.h>
 #include <pwd.h>
 #include <libgen.h>
 #include <fcntl.h>
-#include <fenv.h>
 #include <sys/wait.h>
+
+#ifndef __amigaos4__
+#include <sys/mman.h>
+#include <fenv.h>
+#endif
 
 qboolean stdinIsATTY;
 
@@ -55,6 +58,12 @@ static char gogPath[ MAX_OSPATH ] = { 0 };
 Sys_DefaultHomePath
 ==================
 */
+#ifdef __amigaos4__
+char *Sys_DefaultHomePath(void)
+{
+	return homePath;
+}
+#else
 char *Sys_DefaultHomePath(void)
 {
 	char *p;
@@ -83,7 +92,7 @@ char *Sys_DefaultHomePath(void)
 
 	return homePath;
 }
-
+#endif
 /*
 ================
 Sys_SteamPath
@@ -221,10 +230,26 @@ const char *Sys_Basename( char *path )
 Sys_Dirname
 ==================
 */
+#ifdef __amigaos4__
+static const char emptyPath[] = "";
+
+const char *Sys_Dirname( char *path )
+{
+	const char *dn = dirname( path );
+	//Com_Printf("dirname %s\n", dn);
+
+	if (!Q_stricmp(dn, ".")) {
+		return emptyPath;
+	}
+
+	return dn;
+}
+#else
 const char *Sys_Dirname( char *path )
 {
 	return dirname( path );
 }
+#endif
 
 /*
 ==============
@@ -263,6 +288,11 @@ Sys_Mkfifo
 */
 FILE *Sys_Mkfifo( const char *ospath )
 {
+#ifdef __amigaos4__
+#warning "implement"
+	Com_Printf("Sys_Mkfifo missing\n");
+	return NULL;
+#else
 	FILE	*fifo;
 	int	result;
 	int	fn;
@@ -284,6 +314,7 @@ FILE *Sys_Mkfifo( const char *ospath )
 	}
 
 	return fifo;
+#endif
 }
 
 /*
@@ -635,6 +666,11 @@ Sys_Exec
 */
 static int Sys_Exec( void )
 {
+#ifdef __amigaos4__
+#warning "implement"
+	Com_Printf("Sys_Exec missing\n");
+	return -1;
+#else
 	pid_t pid = fork( );
 
 	if( pid < 0 )
@@ -659,6 +695,7 @@ static int Sys_Exec( void )
 
 		return -1;
 	}
+#endif
 }
 
 /*
@@ -839,8 +876,13 @@ void Sys_GLimpInit( void )
 
 void Sys_SetFloatEnv(void)
 {
+#ifdef __amigaos4__
+#warning "implement"
+	Com_Printf("Sys_SetFloatEnv missing\n");
+#else
 	// rounding toward nearest
 	fesetround(FE_TONEAREST);
+#endif
 }
 
 /*
@@ -889,8 +931,14 @@ void Sys_SetEnv(const char *name, const char *value)
 {
 	if(value && *value)
 		setenv(name, value, 1);
+#ifdef __amigaos4__
+#warning "implement"
+	else
+		Com_Printf("Sys_SetEnv missing\n");
+#else
 	else
 		unsetenv(name);
+#endif
 }
 
 /*
