@@ -910,7 +910,7 @@ ifeq ($(PLATFORM),AMIGAOS)
   SHLIBCFLAGS=-fPIC
   SHLIBLDFLAGS=-shared
 
-  LIBS=-use-dynld -lSDL2 -lpthread -lauto
+  LIBS=-use-dynld -lSDL2 -lpthread #-lauto
 
   PASSIVE_CON=true
 
