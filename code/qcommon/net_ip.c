@@ -577,12 +577,12 @@ qboolean	NET_CompareAdr (netadr_t a, netadr_t b)
 {
 	if(!NET_CompareBaseAdr(a, b))
 		return qfalse;
-	
-	if (a.type == NA_IP
-#ifndef __amigaos4__
-		|| a.type == NA_IP6
+
+#ifdef __amigaos4__
+	if (a.type == NA_IP)
+#else
+	if (a.type == NA_IP || a.type == NA_IP6)
 #endif
-	)
 	{
 		if (a.port == b.port)
 			return qtrue;
@@ -760,9 +760,11 @@ void Sys_SendPacket( int length, const void *data, netadr_t to ) {
 		ret = sendto( ip_socket, socksBuf, length+10, 0, &socksRelayAddr, sizeof(socksRelayAddr) );
 	}
 	else {
+#ifdef __amigaos4__
+		ret = sendto( ip_socket, data, length, 0, (struct sockaddr *) &addr, sizeof(struct sockaddr_in) );
+#else
 		if(addr.ss_family == AF_INET)
 			ret = sendto( ip_socket, data, length, 0, (struct sockaddr *) &addr, sizeof(struct sockaddr_in) );
-#ifndef __amigaos4__
 		else if(addr.ss_family == AF_INET6)
 			ret = sendto( ip6_socket, data, length, 0, (struct sockaddr *) &addr, sizeof(struct sockaddr_in6) );
 #endif
