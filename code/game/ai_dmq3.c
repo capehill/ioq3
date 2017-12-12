@@ -141,17 +141,16 @@ BotTeam
 ==================
 */
 int BotTeam(bot_state_t *bs) {
+	char info[1024];
 
 	if (bs->client < 0 || bs->client >= MAX_CLIENTS) {
+		//BotAI_Print(PRT_ERROR, "BotCTFTeam: client out of range\n");
 		return qfalse;
 	}
-
-    if (level.clients[bs->client].sess.sessionTeam == TEAM_RED) {
-		return TEAM_RED;
-	} else if (level.clients[bs->client].sess.sessionTeam == TEAM_BLUE) {
-		return TEAM_BLUE;
-	}
-
+	trap_GetConfigstring(CS_PLAYERS+bs->client, info, sizeof(info));
+	//
+	if (atoi(Info_ValueForKey(info, "t")) == TEAM_RED) return TEAM_RED;
+	else if (atoi(Info_ValueForKey(info, "t")) == TEAM_BLUE) return TEAM_BLUE;
 	return TEAM_FREE;
 }
 
@@ -686,7 +685,7 @@ void BotCTFSeekGoals(bot_state_t *bs) {
 	if ( bs->lastgoal_ltgtype ) {
 		bs->teamgoal_time += 60;
 	}
-	// if the bot decided to do something on its own and has a last ordered goal
+	// if the bot decided to do something on it's own and has a last ordered goal
 	if ( !bs->ordered && bs->lastgoal_ltgtype ) {
 		bs->ltgtype = 0;
 	}
@@ -713,7 +712,7 @@ void BotCTFSeekGoals(bot_state_t *bs) {
 	//if the bot is roaming
 	if (bs->ctfroam_time > FloatTime())
 		return;
-	//if the bot has enough aggression to decide what to do
+	//if the bot has anough aggression to decide what to do
 	if (BotAggression(bs) < 50)
 		return;
 	//set the time to send a message to the team mates
@@ -932,7 +931,7 @@ void Bot1FCTFSeekGoals(bot_state_t *bs) {
 	if ( bs->lastgoal_ltgtype ) {
 		bs->teamgoal_time += 60;
 	}
-	// if the bot decided to do something on its own and has a last ordered goal
+	// if the bot decided to do something on it's own and has a last ordered goal
 	if ( !bs->ordered && bs->lastgoal_ltgtype ) {
 		bs->ltgtype = 0;
 	}
@@ -960,7 +959,7 @@ void Bot1FCTFSeekGoals(bot_state_t *bs) {
 	//if the bot is roaming
 	if (bs->ctfroam_time > FloatTime())
 		return;
-	//if the bot has enough aggression to decide what to do
+	//if the bot has anough aggression to decide what to do
 	if (BotAggression(bs) < 50)
 		return;
 	//set the time to send a message to the team mates
@@ -1074,7 +1073,7 @@ void BotObeliskSeekGoals(bot_state_t *bs) {
 	//if the bot is roaming
 	if (bs->ctfroam_time > FloatTime())
 		return;
-	//if the bot has enough aggression to decide what to do
+	//if the bot has anough aggression to decide what to do
 	if (BotAggression(bs) < 50)
 		return;
 	//set the time to send a message to the team mates
@@ -1219,7 +1218,7 @@ void BotHarvesterSeekGoals(bot_state_t *bs) {
 	//if the bot is roaming
 	if (bs->ctfroam_time > FloatTime())
 		return;
-	//if the bot has enough aggression to decide what to do
+	//if the bot has anough aggression to decide what to do
 	if (BotAggression(bs) < 50)
 		return;
 	//set the time to send a message to the team mates
@@ -1487,10 +1486,9 @@ EasyClientName
 char *EasyClientName(int client, char *buf, int size) {
 	int i;
 	char *str1, *str2, *ptr, c;
-	char name[128] = {0};
+	char name[128];
 
-	ClientName(client, name, sizeof(name));
-	
+	strcpy(name, ClientName(client, name, sizeof(name)));
 	for (i = 0; name[i]; i++) name[i] &= 127;
 	//remove all spaces
 	for (ptr = strstr(name, " "); ptr; ptr = strstr(name, " ")) {
@@ -1678,8 +1676,8 @@ void BotCheckItemPickup(bot_state_t *bs, int *oldinventory) {
 							//trap_BotEnterChat(bs->cs, leader, CHAT_TELL);
 						}
 					}
+					bs->teamtaskpreference |= TEAMTP_ATTACKER;
 				}
-				bs->teamtaskpreference |= TEAMTP_ATTACKER;
 			}
 			bs->teamtaskpreference &= ~TEAMTP_DEFENDER;
 		}
@@ -2284,7 +2282,7 @@ int BotWantsToRetreat(bot_state_t *bs) {
 	else if (gametype == GT_OBELISK) {
 		//the bots should be dedicated to attacking the enemy obelisk
 		if (bs->ltgtype == LTG_ATTACKENEMYBASE) {
-			if (bs->enemy != redobelisk.entitynum &&
+			if (bs->enemy != redobelisk.entitynum ||
 						bs->enemy != blueobelisk.entitynum) {
 				return qtrue;
 			}
@@ -2301,13 +2299,10 @@ int BotWantsToRetreat(bot_state_t *bs) {
 #endif
 	//
 	if (bs->enemy >= 0) {
+		//if the enemy is carrying a flag
 		BotEntityInfo(bs->enemy, &entinfo);
-		// if the enemy is carrying a flag
-		if (EntityCarriesFlag(&entinfo)) return qfalse;
-#ifdef MISSIONPACK
-		// if the enemy is carrying cubes
-		if (EntityCarriesCubes(&entinfo)) return qfalse;
-#endif
+		if (EntityCarriesFlag(&entinfo))
+			return qfalse;
 	}
 	//if the bot is getting the flag
 	if (bs->ltgtype == LTG_GETFLAG)
@@ -2348,7 +2343,7 @@ int BotWantsToChase(bot_state_t *bs) {
 	else if (gametype == GT_OBELISK) {
 		//the bots should be dedicated to attacking the enemy obelisk
 		if (bs->ltgtype == LTG_ATTACKENEMYBASE) {
-			if (bs->enemy != redobelisk.entitynum &&
+			if (bs->enemy != redobelisk.entitynum ||
 						bs->enemy != blueobelisk.entitynum) {
 				return qfalse;
 			}
@@ -2356,11 +2351,8 @@ int BotWantsToChase(bot_state_t *bs) {
 	}
 	else if (gametype == GT_HARVESTER) {
 		//never chase if carrying cubes
-		if (BotHarvesterCarryingCubes(bs)) return qfalse;
-
-		BotEntityInfo(bs->enemy, &entinfo);
-		// always chase if the enemy is carrying cubes
-		if (EntityCarriesCubes(&entinfo)) return qtrue;
+		if (BotHarvesterCarryingCubes(bs))
+			return qfalse;
 	}
 #endif
 	//if the bot is getting the flag
@@ -2515,10 +2507,10 @@ int BotWantsToCamp(bot_state_t *bs) {
 		bs->camp_time = FloatTime();
 		return qfalse;
 	}
-	//if the bot isn't healthy enough
+	//if the bot isn't healthy anough
 	if (BotAggression(bs) < 50) return qfalse;
 	//the bot should have at least have the rocket launcher, the railgun or the bfg10k with some ammo
-	if ((bs->inventory[INVENTORY_ROCKETLAUNCHER] <= 0 || bs->inventory[INVENTORY_ROCKETS] < 10) &&
+	if ((bs->inventory[INVENTORY_ROCKETLAUNCHER] <= 0 || bs->inventory[INVENTORY_ROCKETS < 10]) &&
 		(bs->inventory[INVENTORY_RAILGUN] <= 0 || bs->inventory[INVENTORY_SLUGS] < 10) &&
 		(bs->inventory[INVENTORY_BFG10K] <= 0 || bs->inventory[INVENTORY_BFGAMMO] < 10)) {
 		return qfalse;
@@ -2607,7 +2599,7 @@ void BotRoamGoal(bot_state_t *bs, vec3_t goal) {
 		//direction and length towards the roam target
 		VectorSubtract(trace.endpos, bs->origin, dir);
 		len = VectorNormalize(dir);
-		//if the roam target is far away enough
+		//if the roam target is far away anough
 		if (len > 200) {
 			//the roam target is in the given direction before walls
 			VectorScale(dir, len * trace.fraction - 40, dir);
@@ -2774,19 +2766,22 @@ BotSameTeam
 ==================
 */
 int BotSameTeam(bot_state_t *bs, int entnum) {
+	char info1[1024], info2[1024];
 
 	if (bs->client < 0 || bs->client >= MAX_CLIENTS) {
+		//BotAI_Print(PRT_ERROR, "BotSameTeam: client out of range\n");
 		return qfalse;
 	}
-
 	if (entnum < 0 || entnum >= MAX_CLIENTS) {
+		//BotAI_Print(PRT_ERROR, "BotSameTeam: client out of range\n");
 		return qfalse;
 	}
-
-	if (gametype >= GT_TEAM) {
-		if (level.clients[bs->client].sess.sessionTeam == level.clients[entnum].sess.sessionTeam) return qtrue;
+	if ( gametype >= GT_TEAM ) {
+		trap_GetConfigstring(CS_PLAYERS+bs->client, info1, sizeof(info1));
+		trap_GetConfigstring(CS_PLAYERS+entnum, info2, sizeof(info2));
+		//
+		if (atoi(Info_ValueForKey(info1, "t")) == atoi(Info_ValueForKey(info2, "t"))) return qtrue;
 	}
-
 	return qfalse;
 }
 
@@ -2876,7 +2871,6 @@ float BotEntityVisible(int viewer, vec3_t eye, vec3_t viewangles, float fov, int
 		BotAI_Trace(&trace, start, NULL, NULL, end, passent, contents_mask);
 		//if water was hit
 		waterfactor = 1.0;
-		//note: trace.contents is always 0, see BotAI_Trace
 		if (trace.contents & (CONTENTS_LAVA|CONTENTS_SLIME|CONTENTS_WATER)) {
 			//if the water surface is translucent
 			if (1) {
@@ -3399,7 +3393,7 @@ void BotAimAtEnemy(bot_state_t *bs) {
 			VectorSubtract(entinfo.origin, bs->enemyorigin, dir);
 			//if the enemy is NOT pretty far away and strafing just small steps left and right
 			if (!(dist > 100 && VectorLengthSquared(dir) < Square(32))) {
-				//if skilled enough do exact prediction
+				//if skilled anough do exact prediction
 				if (aim_skill > 0.8 &&
 						//if the weapon is ready to fire
 						bs->cur_ps.weaponstate == WEAPON_READY) {
@@ -3459,10 +3453,10 @@ void BotAimAtEnemy(bot_state_t *bs) {
 				//if hitpoint is not vertically too far from the ground target
 				if (fabs(trace.endpos[2] - groundtarget[2]) < 50) {
 					VectorSubtract(trace.endpos, groundtarget, dir);
-					//if the hitpoint is near enough the ground target
+					//if the hitpoint is near anough the ground target
 					if (VectorLengthSquared(dir) < Square(60)) {
 						VectorSubtract(trace.endpos, start, dir);
-						//if the hitpoint is far enough from the bot
+						//if the hitpoint is far anough from the bot
 						if (VectorLengthSquared(dir) > Square(100)) {
 							//check if the bot is visible from the ground target
 							trace.endpos[2] += 1;
@@ -3484,7 +3478,7 @@ void BotAimAtEnemy(bot_state_t *bs) {
 		//
 		VectorCopy(bs->lastenemyorigin, bestorigin);
 		bestorigin[2] += 8;
-		//if the bot is skilled enough
+		//if the bot is skilled anough
 		if (aim_skill > 0.5) {
 			//do prediction shots around corners
 			if (wi.number == WP_BFG ||
@@ -3641,7 +3635,7 @@ void BotCheckAttack(bot_state_t *bs) {
 	VectorMA(start, -12, forward, start);
 	BotAI_Trace(&trace, start, mins, maxs, end, bs->entitynum, MASK_SHOT);
 	//if the entity is a client
-	if (trace.ent >= 0 && trace.ent < MAX_CLIENTS) {
+	if (trace.ent > 0 && trace.ent <= MAX_CLIENTS) {
 		if (trace.ent != attackentity) {
 			//if a teammate is hit
 			if (BotSameTeam(bs, trace.ent))
@@ -4433,12 +4427,8 @@ open, which buttons to activate etc.
 ==================
 */
 void BotAIBlocked(bot_state_t *bs, bot_moveresult_t *moveresult, int activate) {
-#ifdef OBSTACLEDEBUG
-	char netname[MAX_NETNAME];
-#endif
 	int movetype, bspent;
-	vec3_t hordir, sideward, angles, up = {0, 0, 1};
-	//vec3_t start, end, mins, maxs;
+	vec3_t hordir, start, end, mins, maxs, sideward, angles, up = {0, 0, 1};
 	aas_entityinfo_t entinfo;
 	bot_activategoal_t activategoal;
 
@@ -4500,11 +4490,11 @@ void BotAIBlocked(bot_state_t *bs, bot_moveresult_t *moveresult, int activate) {
 	movetype = MOVE_WALK;
 	// if there's an obstacle at the bot's feet and head then
 	// the bot might be able to crouch through
-	//VectorCopy(bs->origin, start);
-	//start[2] += 18;
-	//VectorMA(start, 5, hordir, end);
-	//VectorSet(mins, -16, -16, -24);
-	//VectorSet(maxs, 16, 16, 4);
+	VectorCopy(bs->origin, start);
+	start[2] += 18;
+	VectorMA(start, 5, hordir, end);
+	VectorSet(mins, -16, -16, -24);
+	VectorSet(maxs, 16, 16, 4);
 	//
 	//bsptrace = AAS_Trace(start, mins, maxs, end, bs->entitynum, MASK_PLAYERSOLID);
 	//if (bsptrace.fraction >= 1) movetype = MOVE_CROUCH;
@@ -4540,7 +4530,7 @@ BotAIPredictObstacles
 
 Predict the route towards the goal and check if the bot
 will be blocked by certain obstacles. When the bot has obstacles
-on its path the bot should figure out if they can be removed
+on it's path the bot should figure out if they can be removed
 by activating certain entities.
 ==================
 */
@@ -4842,7 +4832,7 @@ void BotCheckEvents(bot_state_t *bs, entityState_t *state) {
 		}
 		case EV_GLOBAL_SOUND:
 		{
-			if (state->eventParm < 0 || state->eventParm >= MAX_SOUNDS) {
+			if (state->eventParm < 0 || state->eventParm > MAX_SOUNDS) {
 				BotAI_Print(PRT_ERROR, "EV_GLOBAL_SOUND: eventParm (%d) out of range\n", state->eventParm);
 				break;
 			}
@@ -4952,7 +4942,7 @@ void BotCheckEvents(bot_state_t *bs, entityState_t *state) {
 		{
 			//if this sound is played on the bot
 			if (state->number == bs->client) {
-				if (state->eventParm < 0 || state->eventParm >= MAX_SOUNDS) {
+				if (state->eventParm < 0 || state->eventParm > MAX_SOUNDS) {
 					BotAI_Print(PRT_ERROR, "EV_GENERAL_SOUND: eventParm (%d) out of range\n", state->eventParm);
 					break;
 				}
@@ -5010,7 +5000,6 @@ void BotCheckEvents(bot_state_t *bs, entityState_t *state) {
 		case EV_USE_ITEM12:
 		case EV_USE_ITEM13:
 		case EV_USE_ITEM14:
-		case EV_USE_ITEM15:
 			break;
 	}
 }
@@ -5142,7 +5131,7 @@ void BotSetupAlternativeRouteGoals(void) {
 #ifdef MISSIONPACK
 	if (gametype == GT_CTF) {
 		if (trap_BotGetLevelItemGoal(-1, "Neutral Flag", &ctf_neutralflag) < 0)
-			BotAI_Print(PRT_WARNING, "No alt routes without Neutral Flag\n");
+			BotAI_Print(PRT_WARNING, "no alt routes without Neutral Flag\n");
 		if (ctf_neutralflag.areanum) {
 			//
 			red_numaltroutegoals = trap_AAS_AlternativeRouteGoals(
@@ -5160,8 +5149,7 @@ void BotSetupAlternativeRouteGoals(void) {
 		}
 	}
 	else if (gametype == GT_1FCTF) {
-		if (trap_BotGetLevelItemGoal(-1, "Neutral Obelisk", &neutralobelisk) < 0)
-			BotAI_Print(PRT_WARNING, "One Flag CTF without Neutral Obelisk\n");
+		//
 		red_numaltroutegoals = trap_AAS_AlternativeRouteGoals(
 									ctf_neutralflag.origin, ctf_neutralflag.areanum,
 									ctf_redflag.origin, ctf_redflag.areanum, TFL_DEFAULT,
@@ -5177,7 +5165,7 @@ void BotSetupAlternativeRouteGoals(void) {
 	}
 	else if (gametype == GT_OBELISK) {
 		if (trap_BotGetLevelItemGoal(-1, "Neutral Obelisk", &neutralobelisk) < 0)
-			BotAI_Print(PRT_WARNING, "No alt routes without Neutral Obelisk\n");
+			BotAI_Print(PRT_WARNING, "Harvester without neutral obelisk\n");
 		//
 		red_numaltroutegoals = trap_AAS_AlternativeRouteGoals(
 									neutralobelisk.origin, neutralobelisk.areanum,
@@ -5193,8 +5181,7 @@ void BotSetupAlternativeRouteGoals(void) {
 									ALTROUTEGOAL_VIEWPORTALS);
 	}
 	else if (gametype == GT_HARVESTER) {
-		if (trap_BotGetLevelItemGoal(-1, "Neutral Obelisk", &neutralobelisk) < 0)
-			BotAI_Print(PRT_WARNING, "Harvester without Neutral Obelisk\n");
+		//
 		red_numaltroutegoals = trap_AAS_AlternativeRouteGoals(
 									neutralobelisk.origin, neutralobelisk.areanum,
 									redobelisk.origin, redobelisk.areanum, TFL_DEFAULT,
@@ -5425,27 +5412,27 @@ void BotSetupDeathmatchAI(void) {
 		if (trap_BotGetLevelItemGoal(-1, "Neutral Flag", &ctf_neutralflag) < 0)
 			BotAI_Print(PRT_WARNING, "One Flag CTF without Neutral Flag\n");
 		if (trap_BotGetLevelItemGoal(-1, "Red Flag", &ctf_redflag) < 0)
-			BotAI_Print(PRT_WARNING, "One Flag CTF without Red Flag\n");
+			BotAI_Print(PRT_WARNING, "CTF without Red Flag\n");
 		if (trap_BotGetLevelItemGoal(-1, "Blue Flag", &ctf_blueflag) < 0)
-			BotAI_Print(PRT_WARNING, "One Flag CTF without Blue Flag\n");
+			BotAI_Print(PRT_WARNING, "CTF without Blue Flag\n");
 	}
 	else if (gametype == GT_OBELISK) {
 		if (trap_BotGetLevelItemGoal(-1, "Red Obelisk", &redobelisk) < 0)
-			BotAI_Print(PRT_WARNING, "Overload without Red Obelisk\n");
+			BotAI_Print(PRT_WARNING, "Obelisk without red obelisk\n");
 		BotSetEntityNumForGoal(&redobelisk, "team_redobelisk");
 		if (trap_BotGetLevelItemGoal(-1, "Blue Obelisk", &blueobelisk) < 0)
-			BotAI_Print(PRT_WARNING, "Overload without Blue Obelisk\n");
+			BotAI_Print(PRT_WARNING, "Obelisk without blue obelisk\n");
 		BotSetEntityNumForGoal(&blueobelisk, "team_blueobelisk");
 	}
 	else if (gametype == GT_HARVESTER) {
 		if (trap_BotGetLevelItemGoal(-1, "Red Obelisk", &redobelisk) < 0)
-			BotAI_Print(PRT_WARNING, "Harvester without Red Obelisk\n");
+			BotAI_Print(PRT_WARNING, "Harvester without red obelisk\n");
 		BotSetEntityNumForGoal(&redobelisk, "team_redobelisk");
 		if (trap_BotGetLevelItemGoal(-1, "Blue Obelisk", &blueobelisk) < 0)
-			BotAI_Print(PRT_WARNING, "Harvester without Blue Obelisk\n");
+			BotAI_Print(PRT_WARNING, "Harvester without blue obelisk\n");
 		BotSetEntityNumForGoal(&blueobelisk, "team_blueobelisk");
 		if (trap_BotGetLevelItemGoal(-1, "Neutral Obelisk", &neutralobelisk) < 0)
-			BotAI_Print(PRT_WARNING, "Harvester without Neutral Obelisk\n");
+			BotAI_Print(PRT_WARNING, "Harvester without neutral obelisk\n");
 		BotSetEntityNumForGoal(&neutralobelisk, "team_neutralobelisk");
 	}
 #endif

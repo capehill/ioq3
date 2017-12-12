@@ -640,7 +640,7 @@ void CG_GibPlayer( vec3_t playerOrigin ) {
 
 /*
 ==================
-CG_LaunchExplode
+CG_LaunchGib
 ==================
 */
 void CG_LaunchExplode( vec3_t origin, vec3_t velocity, qhandle_t hModel ) {
@@ -673,7 +673,7 @@ void CG_LaunchExplode( vec3_t origin, vec3_t velocity, qhandle_t hModel ) {
 #define	EXP_JUMP		150
 /*
 ===================
-CG_BigExplode
+CG_GibPlayer
 
 Generated a bunch of gibs launching out from the bodies location
 ===================

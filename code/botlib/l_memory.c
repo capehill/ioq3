@@ -32,7 +32,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "../qcommon/q_shared.h"
 #include "botlib.h"
 #include "l_log.h"
-#include "l_memory.h"
 #include "be_interface.h"
 
 //#define MEMDEBUG
@@ -101,6 +100,12 @@ void *GetMemory(unsigned long size)
 {
 	void *ptr;
 	memoryblock_t *block;
+
+#ifdef __amigaos4__
+	// Align the memory sizes to multiples of 8 bytes
+	//size = (size + 7) & ~7;
+#endif
+
 	assert(botimport.GetMemory);
 	ptr = botimport.GetMemory(size + sizeof(memoryblock_t));
 	block = (memoryblock_t *) ptr;

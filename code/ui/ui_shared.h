@@ -24,7 +24,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 
 #include "../qcommon/q_shared.h"
-#include "../renderercommon/tr_types.h"
+#include "../renderer/tr_types.h"
 #include "../client/keycodes.h"
 
 #include "../../ui/menudef.h"
@@ -354,8 +354,8 @@ typedef struct {
 	void (*getBindingBuf)( int keynum, char *buf, int buflen );
 	void (*setBinding)( int keynum, const char *binding );
 	void (*executeText)(int exec_when, const char *text );	
-	void (*Error)(int level, const char *error, ...) __attribute__ ((noreturn, format (printf, 2, 3)));
-	void (*Print)(const char *msg, ...) __attribute__ ((format (printf, 1, 2)));
+	void (*Error)(int level, const char *error, ...);
+	void (*Print)(const char *msg, ...);
 	void (*Pause)(qboolean b);
 	int (*ownerDrawWidth)(int ownerDraw, float scale);
 	sfxHandle_t (*registerSound)(const char *name, qboolean compressed);
@@ -417,7 +417,6 @@ void Menu_Reset( void );
 qboolean Menus_AnyFullScreenVisible( void );
 void  Menus_Activate(menuDef_t *menu);
 
-int UI_SelectForKey(int key);
 displayContextDef_t *Display_GetContext( void );
 void *Display_CaptureItem(int x, int y);
 qboolean Display_MouseMove(void *p, int x, int y);

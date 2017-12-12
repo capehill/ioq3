@@ -272,11 +272,11 @@ CopyWinding
 */
 winding_t	*CopyWinding (winding_t *w)
 {
-	intptr_t	size;
+	unsigned long	size;
 	winding_t	*c;
 
 	c = AllocWinding (w->numpoints);
-	size = (intptr_t) ((winding_t *)0)->p[w->numpoints];
+	size = (long)((winding_t *)0)->p[w->numpoints];
 	Com_Memcpy (c, w, size);
 	return c;
 }
@@ -309,8 +309,8 @@ ClipWindingEpsilon
 void	ClipWindingEpsilon (winding_t *in, vec3_t normal, vec_t dist, 
 				vec_t epsilon, winding_t **front, winding_t **back)
 {
-	vec_t	dists[MAX_POINTS_ON_WINDING+4] = { 0 };
-	int		sides[MAX_POINTS_ON_WINDING+4] = { 0 };
+	vec_t	dists[MAX_POINTS_ON_WINDING+4];
+	int		sides[MAX_POINTS_ON_WINDING+4];
 	int		counts[3];
 	static	vec_t	dot;		// VC 4.2 optimizer bug if not static
 	int		i, j;
@@ -421,8 +421,8 @@ ChopWindingInPlace
 void ChopWindingInPlace (winding_t **inout, vec3_t normal, vec_t dist, vec_t epsilon)
 {
 	winding_t	*in;
-	vec_t	dists[MAX_POINTS_ON_WINDING+4] = { 0 };
-	int		sides[MAX_POINTS_ON_WINDING+4] = { 0 };
+	vec_t	dists[MAX_POINTS_ON_WINDING+4];
+	int		sides[MAX_POINTS_ON_WINDING+4];
 	int		counts[3];
 	static	vec_t	dot;		// VC 4.2 optimizer bug if not static
 	int		i, j;

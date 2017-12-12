@@ -132,11 +132,11 @@ UpdateIPBans
 */
 static void UpdateIPBans (void)
 {
-	byte	b[4] = {0};
-	byte	m[4] = {0};
+	byte	b[4];
+	byte	m[4];
 	int		i,j;
-	char	iplist_final[MAX_CVAR_VALUE_STRING] = {0};
-	char	ip[64] = {0};
+	char	iplist_final[MAX_CVAR_VALUE_STRING];
+	char	ip[64];
 
 	*iplist_final = 0;
 	for (i = 0 ; i < numIPFilters ; i++)
@@ -178,7 +178,7 @@ qboolean G_FilterPacket (char *from)
 {
 	int		i;
 	unsigned	in;
-	byte m[4] = {0};
+	byte m[4];
 	char *p;
 
 	i = 0;
@@ -266,7 +266,7 @@ void Svcmd_AddIP_f (void)
 	char		str[MAX_TOKEN_CHARS];
 
 	if ( trap_Argc() < 2 ) {
-		G_Printf("Usage: addip <ip-mask>\n");
+		G_Printf("Usage:  addip <ip-mask>\n");
 		return;
 	}
 
@@ -288,7 +288,7 @@ void Svcmd_RemoveIP_f (void)
 	char		str[MAX_TOKEN_CHARS];
 
 	if ( trap_Argc() < 2 ) {
-		G_Printf("Usage: removeip <ip-mask>\n");
+		G_Printf("Usage:  sv removeip <ip-mask>\n");
 		return;
 	}
 
@@ -423,11 +423,6 @@ void	Svcmd_ForceTeam_f( void ) {
 	gclient_t	*cl;
 	char		str[MAX_TOKEN_CHARS];
 
-	if ( trap_Argc() < 3 ) {
-		G_Printf("Usage: forceteam <player> <team>\n");
-		return;
-	}
-
 	// find the player
 	trap_Argv( 1, str, sizeof( str ) );
 	cl = ClientForString( str );
@@ -500,11 +495,11 @@ qboolean	ConsoleCommand( void ) {
 
 	if (g_dedicated.integer) {
 		if (Q_stricmp (cmd, "say") == 0) {
-			trap_SendServerCommand( -1, va("print \"server: %s\n\"", ConcatArgs(1) ) );
+			trap_SendServerCommand( -1, va("print \"server: %s\"", ConcatArgs(1) ) );
 			return qtrue;
 		}
 		// everything else will also be printed as a say command
-		trap_SendServerCommand( -1, va("print \"server: %s\n\"", ConcatArgs(0) ) );
+		trap_SendServerCommand( -1, va("print \"server: %s\"", ConcatArgs(0) ) );
 		return qtrue;
 	}
 

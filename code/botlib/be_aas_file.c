@@ -61,8 +61,8 @@ void AAS_SwapAASData(void)
 		aasworld.bboxes[i].flags = LittleLong(aasworld.bboxes[i].flags);
 		for (j = 0; j < 3; j++)
 		{
-			aasworld.bboxes[i].mins[j] = LittleFloat(aasworld.bboxes[i].mins[j]);
-			aasworld.bboxes[i].maxs[j] = LittleFloat(aasworld.bboxes[i].maxs[j]);
+			aasworld.bboxes[i].mins[j] = LittleLong(aasworld.bboxes[i].mins[j]);
+			aasworld.bboxes[i].maxs[j] = LittleLong(aasworld.bboxes[i].maxs[j]);
 		} //end for
 	} //end for
 	//vertexes
@@ -281,7 +281,7 @@ void AAS_FileInfo(void)
 } //end of the function AAS_FileInfo
 #endif //AASFILEDEBUG
 //===========================================================================
-// allocate memory and read a lump of an AAS file
+// allocate memory and read a lump of a AAS file
 //
 // Parameter:				-
 // Returns:					-

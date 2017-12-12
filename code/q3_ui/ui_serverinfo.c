@@ -82,8 +82,8 @@ void Favorites_Add( void )
 			return;
 		}
 		
-		// use first empty available slot
-		if (!adrstr[0] && !best)
+		// use first empty or non-numeric available slot
+		if ((adrstr[0]  < '0' || adrstr[0] > '9' ) && !best)
 			best = i+1;
 	}
 

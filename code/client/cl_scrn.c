@@ -224,16 +224,14 @@ void SCR_DrawStringExt( int x, int y, float size, const char *string, float *set
 	xx = x;
 	re.SetColor( setColor );
 	while ( *s ) {
-		if ( Q_IsColorString( s ) ) {
+		if ( !noColorEscape && Q_IsColorString( s ) ) {
 			if ( !forceColor ) {
 				Com_Memcpy( color, g_color_table[ColorIndex(*(s+1))], sizeof( color ) );
 				color[3] = setColor[3];
 				re.SetColor( color );
 			}
-			if ( !noColorEscape ) {
-				s += 2;
-				continue;
-			}
+			s += 2;
+			continue;
 		}
 		SCR_DrawChar( xx, y, size, *s );
 		xx += size;
@@ -275,16 +273,14 @@ void SCR_DrawSmallStringExt( int x, int y, const char *string, float *setColor, 
 	xx = x;
 	re.SetColor( setColor );
 	while ( *s ) {
-		if ( Q_IsColorString( s ) ) {
+		if ( !noColorEscape && Q_IsColorString( s ) ) {
 			if ( !forceColor ) {
 				Com_Memcpy( color, g_color_table[ColorIndex(*(s+1))], sizeof( color ) );
 				color[3] = setColor[3];
 				re.SetColor( color );
 			}
-			if ( !noColorEscape ) {
-				s += 2;
-				continue;
-			}
+			s += 2;
+			continue;
 		}
 		SCR_DrawSmallChar( xx, y, *s );
 		xx += SMALLCHAR_WIDTH;
@@ -318,7 +314,7 @@ static int SCR_Strlen( const char *str ) {
 ** SCR_GetBigStringWidth
 */ 
 int	SCR_GetBigStringWidth( const char *str ) {
-	return SCR_Strlen( str ) * BIGCHAR_WIDTH;
+	return SCR_Strlen( str ) * 16;
 }
 
 
@@ -362,10 +358,12 @@ void SCR_DrawVoipMeter( void ) {
 		return;  // player doesn't want to show meter at all.
 	else if (!cl_voipSend->integer)
 		return;  // not recording at the moment.
-	else if (clc.state != CA_ACTIVE)
+	else if (cls.state != CA_ACTIVE)
 		return;  // not connected to a server.
-	else if (!clc.voipEnabled)
+	else if (!cl_connectedToVoipServer)
 		return;  // server doesn't support VoIP.
+	else if ( Cvar_VariableValue( "g_gametype" ) == GT_SINGLE_PLAYER || Cvar_VariableValue("ui_singlePlayerActive"))
+		return;  // single player game.
 	else if (clc.demoplaying)
 		return;  // playing back a demo.
 	else if (!cl_voip->integer)
@@ -397,18 +395,25 @@ DEBUG GRAPH
 ===============================================================================
 */
 
+typedef struct
+{
+	float	value;
+	int		color;
+} graphsamp_t;
+
 static	int			current;
-static	float		values[1024];
+static	graphsamp_t	values[1024];
 
 /*
 ==============
 SCR_DebugGraph
 ==============
 */
-void SCR_DebugGraph (float value)
+void SCR_DebugGraph (float value, int color)
 {
-	values[current] = value;
-	current = (current + 1) % ARRAY_LEN(values);
+	values[current&1023].value = value;
+	values[current&1023].color = color;
+	current++;
 }
 
 /*
@@ -420,6 +425,7 @@ void SCR_DrawDebugGraph (void)
 {
 	int		a, x, y, w, i, h;
 	float	v;
+	int		color;
 
 	//
 	// draw the graph
@@ -434,8 +440,9 @@ void SCR_DrawDebugGraph (void)
 
 	for (a=0 ; a<w ; a++)
 	{
-		i = (ARRAY_LEN(values)+current-1-(a % ARRAY_LEN(values))) % ARRAY_LEN(values);
-		v = values[i];
+		i = (current-1-a+1024) & 1023;
+		v = values[i].value;
+		color = values[i].color;
 		v = v * cl_graphscale->integer + cl_graphshift->integer;
 		
 		if (v < 0)
@@ -473,28 +480,25 @@ This will be called twice if rendering in stereo mode
 ==================
 */
 void SCR_DrawScreenField( stereoFrame_t stereoFrame ) {
-	qboolean uiFullscreen;
-
 	re.BeginFrame( stereoFrame );
-
-	uiFullscreen = (uivm && VM_Call( uivm, UI_IS_FULLSCREEN ));
-
+//Com_Printf("dsf 1\n");
 	// wide aspect ratio screens need to have the sides cleared
 	// unless they are displaying game renderings
-	if ( uiFullscreen || clc.state < CA_LOADING ) {
+	if ( cls.state != CA_ACTIVE && cls.state != CA_CINEMATIC ) {
 		if ( cls.glconfig.vidWidth * 480 > cls.glconfig.vidHeight * 640 ) {
 			re.SetColor( g_color_table[0] );
 			re.DrawStretchPic( 0, 0, cls.glconfig.vidWidth, cls.glconfig.vidHeight, 0, 0, 0, 0, cls.whiteShader );
 			re.SetColor( NULL );
 		}
 	}
+//Com_Printf("dsf 2\n");
 
 	// if the menu is going to cover the entire screen, we
 	// don't need to render anything under it
-	if ( uivm && !uiFullscreen ) {
-		switch( clc.state ) {
+	if ( uivm && !VM_Call( uivm, UI_IS_FULLSCREEN )) {
+		switch( cls.state ) {
 		default:
-			Com_Error( ERR_FATAL, "SCR_DrawScreenField: bad clc.state" );
+			Com_Error( ERR_FATAL, "SCR_DrawScreenField: bad cls.state" );
 			break;
 		case CA_CINEMATIC:
 			SCR_DrawCinematic();
@@ -533,19 +537,24 @@ void SCR_DrawScreenField( stereoFrame_t stereoFrame ) {
 			break;
 		}
 	}
+//Com_Printf("dsf 3\n");
 
 	// the menu draws next
 	if ( Key_GetCatcher( ) & KEYCATCH_UI && uivm ) {
 		VM_Call( uivm, UI_REFRESH, cls.realtime );
 	}
+//Com_Printf("dsf 4\n");
 
 	// console draws next
 	Con_DrawConsole ();
+//Com_Printf("dsf 5\n");
 
 	// debug graph can be drawn on top of anything
 	if ( cl_debuggraph->integer || cl_timegraph->integer || cl_debugMove->integer ) {
 		SCR_DrawDebugGraph ();
 	}
+//Com_Printf("dsf 6\n");
+
 }
 
 /*
@@ -572,10 +581,8 @@ void SCR_UpdateScreen( void ) {
 	// that case.
 	if( uivm || com_dedicated->integer )
 	{
-		// XXX
-		int in_anaglyphMode = Cvar_VariableIntegerValue("r_anaglyphMode");
 		// if running in stereo, we need to draw the frame twice
-		if ( cls.glconfig.stereoEnabled || in_anaglyphMode) {
+		if ( cls.glconfig.stereoEnabled || Cvar_VariableIntegerValue("r_anaglyphMode")) {
 			SCR_DrawScreenField( STEREO_LEFT );
 			SCR_DrawScreenField( STEREO_RIGHT );
 		} else {

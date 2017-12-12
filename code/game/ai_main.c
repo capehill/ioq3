@@ -149,8 +149,7 @@ void BotAI_Trace(bsp_trace_t *bsptrace, vec3_t start, vec3_t mins, vec3_t maxs, 
 	VectorCopy(trace.plane.normal, bsptrace->plane.normal);
 	bsptrace->plane.signbits = trace.plane.signbits;
 	bsptrace->plane.type = trace.plane.type;
-	bsptrace->surface.value = 0;
-	bsptrace->surface.flags = trace.surfaceFlags;
+	bsptrace->surface.value = trace.surfaceFlags;
 	bsptrace->ent = trace.entityNum;
 	bsptrace->exp_dist = 0;
 	bsptrace->sidenum = 0;
@@ -256,7 +255,7 @@ void BotTestAAS(vec3_t origin) {
 	if (bot_testsolid.integer) {
 		if (!trap_AAS_Initialized()) return;
 		areanum = BotPointAreaNum(origin);
-		if (areanum) BotAI_Print(PRT_MESSAGE, "\rempty area");
+		if (areanum) BotAI_Print(PRT_MESSAGE, "\remtpy area");
 		else BotAI_Print(PRT_MESSAGE, "\r^1SOLID area");
 	}
 	else if (bot_testclusters.integer) {
@@ -781,7 +780,7 @@ void BotChangeViewAngles(bot_state_t *bs, float thinktime) {
 		//
 		if (bot_challenge.integer) {
 			//smooth slowdown view model
-			diff = fabs(AngleDifference(bs->viewangles[i], bs->ideal_viewangles[i]));
+			diff = abs(AngleDifference(bs->viewangles[i], bs->ideal_viewangles[i]));
 			anglespeed = diff * factor;
 			if (anglespeed > maxchange) anglespeed = maxchange;
 			bs->viewangles[i] = BotChangeViewAngle(bs->viewangles[i],
@@ -822,10 +821,11 @@ void BotInputToUserCommand(bot_input_t *bi, usercmd_t *ucmd, int delta_angles[3]
 	vec3_t angles, forward, right;
 	short temp;
 	int j;
-	float f, r, u, m;
 
 	//clear the whole structure
 	memset(ucmd, 0, sizeof(usercmd_t));
+	//
+	//Com_Printf("dir = %f %f %f speed = %f\n", bi->dir[0], bi->dir[1], bi->dir[2], bi->speed);
 	//the duration for the user command in milli seconds
 	ucmd->serverTime = time;
 	//
@@ -876,37 +876,21 @@ void BotInputToUserCommand(bot_input_t *bi, usercmd_t *ucmd, int delta_angles[3]
 	//bot input speed is in the range [0, 400]
 	bi->speed = bi->speed * 127 / 400;
 	//set the view independent movement
-	f = DotProduct(forward, bi->dir);
-	r = DotProduct(right, bi->dir);
-	u = fabs(forward[2]) * bi->dir[2];
-	m = fabs(f);
-
-	if (fabs(r) > m) {
-		m = fabs(r);
-	}
-
-	if (fabs(u) > m) {
-		m = fabs(u);
-	}
-
-	if (m > 0) {
-		f *= bi->speed / m;
-		r *= bi->speed / m;
-		u *= bi->speed / m;
-	}
-
-	ucmd->forwardmove = f;
-	ucmd->rightmove = r;
-	ucmd->upmove = u;
-
-	if (bi->actionflags & ACTION_MOVEFORWARD) ucmd->forwardmove = 127;
-	if (bi->actionflags & ACTION_MOVEBACK) ucmd->forwardmove = -127;
-	if (bi->actionflags & ACTION_MOVELEFT) ucmd->rightmove = -127;
-	if (bi->actionflags & ACTION_MOVERIGHT) ucmd->rightmove = 127;
+	ucmd->forwardmove = DotProduct(forward, bi->dir) * bi->speed;
+	ucmd->rightmove = DotProduct(right, bi->dir) * bi->speed;
+	ucmd->upmove = abs(forward[2]) * bi->dir[2] * bi->speed;
+	//normal keyboard movement
+	if (bi->actionflags & ACTION_MOVEFORWARD) ucmd->forwardmove += 127;
+	if (bi->actionflags & ACTION_MOVEBACK) ucmd->forwardmove -= 127;
+	if (bi->actionflags & ACTION_MOVELEFT) ucmd->rightmove -= 127;
+	if (bi->actionflags & ACTION_MOVERIGHT) ucmd->rightmove += 127;
 	//jump/moveup
-	if (bi->actionflags & ACTION_JUMP) ucmd->upmove = 127;
+	if (bi->actionflags & ACTION_JUMP) ucmd->upmove += 127;
 	//crouch/movedown
-	if (bi->actionflags & ACTION_CROUCH) ucmd->upmove = -127;
+	if (bi->actionflags & ACTION_CROUCH) ucmd->upmove -= 127;
+	//
+	//Com_Printf("forward = %d right = %d up = %d\n", ucmd.forwardmove, ucmd.rightmove, ucmd.upmove);
+	//Com_Printf("ucmd->serverTime = %d\n", ucmd->serverTime);
 }
 
 /*
@@ -1100,8 +1084,7 @@ void BotWriteSessionData(bot_state_t *bs) {
 			"%i %i %i %i %i %i %i %i"
 			" %f %f %f"
 			" %f %f %f"
-			" %f %f %f"
-			" %f",
+			" %f %f %f",
 		bs->lastgoal_decisionmaker,
 		bs->lastgoal_ltgtype,
 		bs->lastgoal_teammate,
@@ -1118,8 +1101,7 @@ void BotWriteSessionData(bot_state_t *bs) {
 		bs->lastgoal_teamgoal.mins[2],
 		bs->lastgoal_teamgoal.maxs[0],
 		bs->lastgoal_teamgoal.maxs[1],
-		bs->lastgoal_teamgoal.maxs[2],
-		bs->formation_dist
+		bs->lastgoal_teamgoal.maxs[2]
 		);
 
 	var = va( "botsession%i", bs->client );
@@ -1143,8 +1125,7 @@ void BotReadSessionData(bot_state_t *bs) {
 			"%i %i %i %i %i %i %i %i"
 			" %f %f %f"
 			" %f %f %f"
-			" %f %f %f"
-			" %f",
+			" %f %f %f",
 		&bs->lastgoal_decisionmaker,
 		&bs->lastgoal_ltgtype,
 		&bs->lastgoal_teammate,
@@ -1161,8 +1142,7 @@ void BotReadSessionData(bot_state_t *bs) {
 		&bs->lastgoal_teamgoal.mins[2],
 		&bs->lastgoal_teamgoal.maxs[0],
 		&bs->lastgoal_teamgoal.maxs[1],
-		&bs->lastgoal_teamgoal.maxs[2],
-		&bs->formation_dist
+		&bs->lastgoal_teamgoal.maxs[2]
 		);
 }
 
@@ -1178,10 +1158,6 @@ int BotAISetupClient(int client, struct bot_settings_s *settings, qboolean resta
 
 	if (!botstates[client]) botstates[client] = G_Alloc(sizeof(bot_state_t));
 	bs = botstates[client];
-
-	if (!bs) {
-		return qfalse;
-	}
 
 	if (bs && bs->inuse) {
 		BotAI_Print(PRT_FATAL, "BotAISetupClient: client %d already setup\n", client);
@@ -1289,7 +1265,7 @@ int BotAIShutdownClient(int client, qboolean restart) {
 	}
 
 	trap_BotFreeMoveState(bs->ms);
-	//free the goal state
+	//free the goal state`			
 	trap_BotFreeGoalState(bs->gs);
 	//free the chat file
 	trap_BotFreeChatState(bs->cs);

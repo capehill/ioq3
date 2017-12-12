@@ -25,9 +25,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "../botlib/botlib.h"
 
-#ifdef USE_MUMBLE
 #include "libmumblelink.h"
-#endif
 
 extern	botlib_export_t	*botlib_export;
 
@@ -186,6 +184,15 @@ void CL_AddCgameCommand( const char *cmdName ) {
 	Cmd_AddCommand( cmdName, NULL );
 }
 
+/*
+=====================
+CL_CgameError
+=====================
+*/
+void CL_CgameError( const char *string ) {
+	Com_Error( ERR_DROP, "%s", string );
+}
+
 
 /*
 =====================
@@ -201,7 +208,7 @@ void CL_ConfigstringModified( void ) {
 
 	index = atoi( Cmd_Argv(1) );
 	if ( index < 0 || index >= MAX_CONFIGSTRINGS ) {
-		Com_Error( ERR_DROP, "CL_ConfigstringModified: bad index %i", index );
+		Com_Error( ERR_DROP, "configstring > MAX_CONFIGSTRINGS" );
 	}
 	// get everything after "cs <num>"
 	s = Cmd_ArgsFrom(2);
@@ -293,7 +300,7 @@ rescan:
 		if ( argc >= 2 )
 			Com_Error( ERR_SERVERDISCONNECT, "Server disconnected - %s", Cmd_Argv( 1 ) );
 		else
-			Com_Error( ERR_SERVERDISCONNECT, "Server disconnected" );
+			Com_Error( ERR_SERVERDISCONNECT, "Server disconnected\n" );
 	}
 
 	if ( !strcmp( cmd, "bcs0" ) ) {
@@ -332,8 +339,6 @@ rescan:
 		// clear notify lines and outgoing commands before passing
 		// the restart to the cgame
 		Con_ClearNotify();
-		// reparse the string, because Con_ClearNotify() may have done another Cmd_TokenizeString()
-		Cmd_TokenizeString( s );
 		Com_Memset( cl.cmds, 0, sizeof( cl.cmds ) );
 		return qtrue;
 	}
@@ -424,7 +429,7 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		Cvar_Update( VMA(1) );
 		return 0;
 	case CG_CVAR_SET:
-		Cvar_SetSafe( VMA(1), VMA(2) );
+		Cvar_Set( VMA(1), VMA(2) );
 		return 0;
 	case CG_CVAR_VARIABLESTRINGBUFFER:
 		Cvar_VariableStringBuffer( VMA(1), VMA(2), args[3] );
@@ -440,7 +445,7 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 	case CG_FS_FOPENFILE:
 		return FS_FOpenFileByMode( VMA(1), VMA(2), args[3] );
 	case CG_FS_READ:
-		FS_Read( VMA(1), args[2], args[3] );
+		FS_Read2( VMA(1), args[2], args[3] );
 		return 0;
 	case CG_FS_WRITE:
 		FS_Write( VMA(1), args[2], args[3] );
@@ -457,10 +462,10 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		CL_AddCgameCommand( VMA(1) );
 		return 0;
 	case CG_REMOVECOMMAND:
-		Cmd_RemoveCommandSafe( VMA(1) );
+		Cmd_RemoveCommand( VMA(1) );
 		return 0;
 	case CG_SENDCLIENTCOMMAND:
-		CL_AddReliableCommand(VMA(1), qfalse);
+		CL_AddReliableCommand( VMA(1) );
 		return 0;
 	case CG_UPDATESCREEN:
 		// this is used during lengthy level loading, so pump message loop
@@ -541,7 +546,6 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		return re.RegisterShaderNoMip( VMA(1) );
 	case CG_R_REGISTERFONT:
 		re.RegisterFont( VMA(1), args[2], VMA(3));
-		return 0;
 	case CG_R_CLEARSCENE:
 		re.ClearScene();
 		return 0;
@@ -653,7 +657,7 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 	case CG_REAL_TIME:
 		return Com_RealTime( VMA(1) );
 	case CG_SNAPVECTOR:
-		Q_SnapVector(VMA(1));
+		Sys_SnapVector( VMA(1) );
 		return 0;
 
 	case CG_CIN_PLAYCINEMATIC:
@@ -725,19 +729,18 @@ void CL_InitCGame( void ) {
 	Com_sprintf( cl.mapname, sizeof( cl.mapname ), "maps/%s.bsp", mapname );
 
 	// load the dll or bytecode
-	interpret = Cvar_VariableValue("vm_cgame");
-	if(cl_connectedToPureServer)
-	{
+	if ( cl_connectedToPureServer != 0 ) {
 		// if sv_pure is set we only allow qvms to be loaded
-		if(interpret != VMI_COMPILED && interpret != VMI_BYTECODE)
-			interpret = VMI_COMPILED;
+		interpret = VMI_COMPILED;
 	}
-
+	else {
+		interpret = Cvar_VariableValue( "vm_cgame" );
+	}
 	cgvm = VM_Create( "cgame", CL_CgameSystemCalls, interpret );
 	if ( !cgvm ) {
 		Com_Error( ERR_DROP, "VM_Create on cgame failed" );
 	}
-	clc.state = CA_LOADING;
+	cls.state = CA_LOADING;
 
 	// init for this gamestate
 	// use the lastExecutedServerCommand instead of the serverCommandSequence
@@ -750,7 +753,7 @@ void CL_InitCGame( void ) {
 
 	// we will send a usercmd this frame, which
 	// will cause the server to send us the first snapshot
-	clc.state = CA_PRIMED;
+	cls.state = CA_PRIMED;
 
 	t2 = Sys_Milliseconds();
 
@@ -821,6 +824,7 @@ or bursted delayed packets.
 #define	RESET_TIME	500
 
 void CL_AdjustTimeDelta( void ) {
+	int		resetTime;
 	int		newDelta;
 	int		deltaDelta;
 
@@ -829,6 +833,13 @@ void CL_AdjustTimeDelta( void ) {
 	// the delta never drifts when replaying a demo
 	if ( clc.demoplaying ) {
 		return;
+	}
+
+	// if the current time is WAY off, just correct to the current value
+	if ( com_sv_running->integer ) {
+		resetTime = 100;
+	} else {
+		resetTime = RESET_TIME;
 	}
 
 	newDelta = cl.snap.serverTime - cls.realtime;
@@ -880,7 +891,7 @@ void CL_FirstSnapshot( void ) {
 	if ( cl.snap.snapFlags & SNAPFLAG_NOT_ACTIVE ) {
 		return;
 	}
-	clc.state = CA_ACTIVE;
+	cls.state = CA_ACTIVE;
 
 	// set the timedelta so we are exactly on this first frame
 	cl.serverTimeDelta = cl.snap.serverTime - cls.realtime;
@@ -905,31 +916,41 @@ void CL_FirstSnapshot( void ) {
 #endif
 
 #ifdef USE_VOIP
-	if (!clc.voipCodecInitialized) {
+	if (!clc.speexInitialized) {
 		int i;
-		int error;
+		speex_bits_init(&clc.speexEncoderBits);
+		speex_bits_reset(&clc.speexEncoderBits);
 
-		clc.opusEncoder = opus_encoder_create(48000, 1, OPUS_APPLICATION_VOIP, &error);
+		clc.speexEncoder = speex_encoder_init(&speex_nb_mode);
 
-		if ( error ) {
-			Com_DPrintf("VoIP: Error opus_encoder_create %d\n", error);
-			return;
-		}
+		speex_encoder_ctl(clc.speexEncoder, SPEEX_GET_FRAME_SIZE,
+		                  &clc.speexFrameSize);
+		speex_encoder_ctl(clc.speexEncoder, SPEEX_GET_SAMPLING_RATE,
+		                  &clc.speexSampleRate);
+
+		clc.speexPreprocessor = speex_preprocess_state_init(clc.speexFrameSize,
+		                                                  clc.speexSampleRate);
+
+		i = 1;
+		speex_preprocess_ctl(clc.speexPreprocessor,
+		                     SPEEX_PREPROCESS_SET_DENOISE, &i);
+
+		i = 1;
+		speex_preprocess_ctl(clc.speexPreprocessor,
+		                     SPEEX_PREPROCESS_SET_AGC, &i);
 
 		for (i = 0; i < MAX_CLIENTS; i++) {
-			clc.opusDecoder[i] = opus_decoder_create(48000, 1, &error);
-			if ( error ) {
-				Com_DPrintf("VoIP: Error opus_decoder_create(%d) %d\n", i, error);
-				return;
-			}
+			speex_bits_init(&clc.speexDecoderBits[i]);
+			speex_bits_reset(&clc.speexDecoderBits[i]);
+			clc.speexDecoder[i] = speex_decoder_init(&speex_nb_mode);
 			clc.voipIgnore[i] = qfalse;
 			clc.voipGain[i] = 1.0f;
 		}
-		clc.voipCodecInitialized = qtrue;
+		clc.speexInitialized = qtrue;
 		clc.voipMuteAll = qfalse;
 		Cmd_AddCommand ("voip", CL_Voip_f);
-		Cvar_Set("cl_voipSendTarget", "spatial");
-		Com_Memset(clc.voipTargets, ~0, sizeof(clc.voipTargets));
+		Cvar_Set("cl_voipSendTarget", "all");
+		clc.voipTarget1 = clc.voipTarget2 = clc.voipTarget3 = 0x7FFFFFFF;
 	}
 #endif
 }
@@ -941,8 +962,8 @@ CL_SetCGameTime
 */
 void CL_SetCGameTime( void ) {
 	// getting a valid frame message ends the connection process
-	if ( clc.state != CA_ACTIVE ) {
-		if ( clc.state != CA_PRIMED ) {
+	if ( cls.state != CA_ACTIVE ) {
+		if ( cls.state != CA_PRIMED ) {
 			return;
 		}
 		if ( clc.demoplaying ) {
@@ -958,7 +979,7 @@ void CL_SetCGameTime( void ) {
 			cl.newSnapshots = qfalse;
 			CL_FirstSnapshot();
 		}
-		if ( clc.state != CA_ACTIVE ) {
+		if ( cls.state != CA_ACTIVE ) {
 			return;
 		}
 	}	
@@ -1071,7 +1092,7 @@ void CL_SetCGameTime( void ) {
 		// feed another messag, which should change
 		// the contents of cl.snap
 		CL_ReadDemoMessage();
-		if ( clc.state != CA_ACTIVE ) {
+		if ( cls.state != CA_ACTIVE ) {
 			return;		// end of demo
 		}
 	}

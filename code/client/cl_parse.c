@@ -34,8 +34,8 @@ char *svc_strings[256] = {
 	"svc_download",
 	"svc_snapshot",
 	"svc_EOF",
-	"svc_voipSpeex",
-	"svc_voipOpus",
+	"svc_extension",
+	"svc_voip",
 };
 
 void SHOWNET( msg_t *msg, char *s) {
@@ -253,7 +253,7 @@ void CL_ParseSnapshot( msg_t *msg ) {
 			// The frame that the server did the delta from
 			// is too old, so we can't reconstruct it properly.
 			Com_Printf ("Delta frame too old.\n");
-		} else if ( cl.parseEntitiesNum - old->parseEntitiesNum > MAX_PARSE_ENTITIES - MAX_SNAPSHOT_ENTITIES ) {
+		} else if ( cl.parseEntitiesNum - old->parseEntitiesNum > MAX_PARSE_ENTITIES-128 ) {
 			Com_Printf ("Delta parseEntitiesNum too old.\n");
 		} else {
 			newSnap.valid = qtrue;	// valid delta parse
@@ -265,7 +265,7 @@ void CL_ParseSnapshot( msg_t *msg ) {
 	
 	if(len > sizeof(newSnap.areamask))
 	{
-		Com_Error (ERR_DROP,"CL_ParseSnapshot: Invalid size %d for areamask", len);
+		Com_Error (ERR_DROP,"CL_ParseSnapshot: Invalid size %d for areamask.", len);
 		return;
 	}
 	
@@ -330,6 +330,10 @@ void CL_ParseSnapshot( msg_t *msg ) {
 int cl_connectedToPureServer;
 int cl_connectedToCheatServer;
 
+#ifdef USE_VOIP
+int cl_connectedToVoipServer;
+#endif
+
 /*
 ==================
 CL_SystemInfoChanged
@@ -353,22 +357,17 @@ void CL_SystemInfoChanged( void ) {
 	// in some cases, outdated cp commands might get sent with this news serverId
 	cl.serverId = atoi( Info_ValueForKey( systemInfo, "sv_serverid" ) );
 
-#ifdef USE_VOIP
-#ifdef LEGACY_PROTOCOL
-	if(clc.compat)
-		clc.voipEnabled = qfalse;
-	else
-#endif
-	{
-		s = Info_ValueForKey( systemInfo, "sv_voipProtocol" );
-		clc.voipEnabled = !Q_stricmp(s, "opus");
-	}
-#endif
-
 	// don't set any vars when playing a demo
 	if ( clc.demoplaying ) {
 		return;
 	}
+
+#ifdef USE_VOIP
+	// in the future, (val) will be a protocol version string, so only
+	//  accept explicitly 1, not generally non-zero.
+	s = Info_ValueForKey( systemInfo, "sv_voip" );
+	cl_connectedToVoipServer = (atoi( s ) == 1);
+#endif
 
 	s = Info_ValueForKey( systemInfo, "sv_cheats" );
 	cl_connectedToCheatServer = atoi( s );
@@ -413,19 +412,13 @@ void CL_SystemInfoChanged( void ) {
 		else
 		{
 			// If this cvar may not be modified by a server discard the value.
-			if(!(cvar_flags & (CVAR_SYSTEMINFO | CVAR_SERVER_CREATED | CVAR_USER_CREATED)))
+			if(!(cvar_flags & (CVAR_SYSTEMINFO | CVAR_SERVER_CREATED)))
 			{
-#ifndef STANDALONE
-				if(Q_stricmp(key, "g_synchronousClients") && Q_stricmp(key, "pmove_fixed") &&
-				   Q_stricmp(key, "pmove_msec"))
-#endif
-				{
-					Com_Printf(S_COLOR_YELLOW "WARNING: server is not allowed to set %s=%s\n", key, value);
-					continue;
-				}
+				Com_Printf(S_COLOR_YELLOW "WARNING: server is not allowed to set %s=%s\n", key, value);
+				continue;
 			}
 
-			Cvar_SetSafe(key, value);
+			Cvar_Set(key, value);
 		}
 	}
 	// if game folder should not be set and it is set at the client side
@@ -466,7 +459,6 @@ void CL_ParseGamestate( msg_t *msg ) {
 	entityState_t	nullstate;
 	int				cmd;
 	char			*s;
-	char oldGame[MAX_QPATH];
 
 	Con_Close();
 
@@ -522,9 +514,6 @@ void CL_ParseGamestate( msg_t *msg ) {
 	// read the checksum feed
 	clc.checksumFeed = MSG_ReadLong( msg );
 
-	// save old gamedir
-	Cvar_VariableStringBuffer("fs_game", oldGame, sizeof(oldGame));
-
 	// parse useful values out of CS_SERVERINFO
 	CL_ParseServerInfo();
 
@@ -536,13 +525,7 @@ void CL_ParseGamestate( msg_t *msg ) {
 		CL_StopRecord_f();
 	
 	// reinitialize the filesystem if the game directory has changed
-	if(!cl_oldGameSet && (Cvar_Flags("fs_game") & CVAR_MODIFIED))
-	{
-		cl_oldGameSet = qtrue;
-		Q_strncpyz(cl_oldGame, oldGame, sizeof(cl_oldGame));
-	}
-
-	FS_ConditionalRestart(clc.checksumFeed, qfalse);
+	FS_ConditionalRestart( clc.checksumFeed );
 
 	// This used to call CL_StartHunkUsers, but now we enter the download state before loading the
 	// cgame
@@ -565,18 +548,18 @@ A download message has been received from the server
 void CL_ParseDownload ( msg_t *msg ) {
 	int		size;
 	unsigned char data[MAX_MSGLEN];
-	uint16_t block;
+	int block;
 
 	if (!*clc.downloadTempName) {
 		Com_Printf("Server sending download, but no download was requested\n");
-		CL_AddReliableCommand("stopdl", qfalse);
+		CL_AddReliableCommand( "stopdl" );
 		return;
 	}
 
 	// read the data
 	block = MSG_ReadShort ( msg );
 
-	if(!block && !clc.downloadBlock)
+	if ( !block )
 	{
 		// block zero is special, contains file size
 		clc.downloadSize = MSG_ReadLong ( msg );
@@ -593,15 +576,14 @@ void CL_ParseDownload ( msg_t *msg ) {
 	size = MSG_ReadShort ( msg );
 	if (size < 0 || size > sizeof(data))
 	{
-		Com_Error(ERR_DROP, "CL_ParseDownload: Invalid size %d for download chunk", size);
+		Com_Error(ERR_DROP, "CL_ParseDownload: Invalid size %d for download chunk.", size);
 		return;
 	}
 	
 	MSG_ReadData(msg, data, size);
 
-	if((clc.downloadBlock & 0xFFFF) != block)
-	{
-		Com_DPrintf( "CL_ParseDownload: Expected block %d, got %d\n", (clc.downloadBlock & 0xFFFF), block);
+	if (clc.downloadBlock != block) {
+		Com_DPrintf( "CL_ParseDownload: Expected block %d, got %d\n", clc.downloadBlock, block);
 		return;
 	}
 
@@ -612,7 +594,7 @@ void CL_ParseDownload ( msg_t *msg ) {
 
 		if (!clc.download) {
 			Com_Printf( "Could not create %s\n", clc.downloadTempName );
-			CL_AddReliableCommand("stopdl", qfalse);
+			CL_AddReliableCommand( "stopdl" );
 			CL_NextDownload();
 			return;
 		}
@@ -621,7 +603,7 @@ void CL_ParseDownload ( msg_t *msg ) {
 	if (size)
 		FS_Write( data, size, clc.download );
 
-	CL_AddReliableCommand(va("nextdl %d", clc.downloadBlock), qfalse);
+	CL_AddReliableCommand( va("nextdl %d", clc.downloadBlock) );
 	clc.downloadBlock++;
 
 	clc.downloadCount += size;
@@ -635,8 +617,10 @@ void CL_ParseDownload ( msg_t *msg ) {
 			clc.download = 0;
 
 			// rename the file
-			FS_SV_Rename ( clc.downloadTempName, clc.downloadName, qfalse );
+			FS_SV_Rename ( clc.downloadTempName, clc.downloadName );
 		}
+		*clc.downloadTempName = *clc.downloadName = 0;
+		Cvar_Set( "cl_downloadName", "" );
 
 		// send intentions now
 		// We need this because without it, we would hold the last nextdl and then start
@@ -671,47 +655,22 @@ qboolean CL_ShouldIgnoreVoipSender(int sender)
 
 /*
 =====================
-CL_PlayVoip
-
-Play raw data
-=====================
-*/
-
-static void CL_PlayVoip(int sender, int samplecnt, const byte *data, int flags)
-{
-	if(flags & VOIP_DIRECT)
-	{
-		S_RawSamples(sender + 1, samplecnt, 48000, 2, 1,
-	             data, clc.voipGain[sender], -1);
-	}
-
-	if(flags & VOIP_SPATIAL)
-	{
-		S_RawSamples(sender + MAX_CLIENTS + 1, samplecnt, 48000, 2, 1,
-	             data, 1.0f, sender);
-	}
-}
-
-/*
-=====================
 CL_ParseVoip
 
 A VoIP message has been received from the server
 =====================
 */
 static
-void CL_ParseVoip ( msg_t *msg, qboolean ignoreData ) {
-	static short decoded[VOIP_MAX_PACKET_SAMPLES*4]; // !!! FIXME: don't hard code
+void CL_ParseVoip ( msg_t *msg ) {
+	static short decoded[4096];  // !!! FIXME: don't hardcode.
 
 	const int sender = MSG_ReadShort(msg);
 	const int generation = MSG_ReadByte(msg);
 	const int sequence = MSG_ReadLong(msg);
 	const int frames = MSG_ReadByte(msg);
 	const int packetsize = MSG_ReadShort(msg);
-	const int flags = MSG_ReadBits(msg, VOIP_FLAGCNT);
-	unsigned char encoded[4000];
-	int	numSamples;
-	int seqdiff;
+	char encoded[1024];
+	int seqdiff = sequence - clc.voipIncomingSequence[sender];
 	int written = 0;
 	int i;
 
@@ -740,15 +699,14 @@ void CL_ParseVoip ( msg_t *msg, qboolean ignoreData ) {
 		return;   // overlarge packet, bail.
 	}
 
-	MSG_ReadData(msg, encoded, packetsize);
-
-	if (ignoreData) {
-		return; // just ignore legacy speex voip data
-	} else if (!clc.voipCodecInitialized) {
-		return;   // can't handle VoIP without libopus!
+	if (!clc.speexInitialized) {
+		MSG_ReadData(msg, encoded, packetsize);  // skip payload.
+		return;   // can't handle VoIP without libspeex!
 	} else if (sender >= MAX_CLIENTS) {
+		MSG_ReadData(msg, encoded, packetsize);  // skip payload.
 		return;   // bogus sender.
 	} else if (CL_ShouldIgnoreVoipSender(sender)) {
+		MSG_ReadData(msg, encoded, packetsize);  // skip payload.
 		return;   // Channel is muted, bail.
 	}
 
@@ -756,67 +714,79 @@ void CL_ParseVoip ( msg_t *msg, qboolean ignoreData ) {
 
 	Com_DPrintf("VoIP: packet accepted!\n");
 
-	seqdiff = sequence - clc.voipIncomingSequence[sender];
-
 	// This is a new "generation" ... a new recording started, reset the bits.
 	if (generation != clc.voipIncomingGeneration[sender]) {
 		Com_DPrintf("VoIP: new generation %d!\n", generation);
-		opus_decoder_ctl(clc.opusDecoder[sender], OPUS_RESET_STATE);
+		speex_bits_reset(&clc.speexDecoderBits[sender]);
 		clc.voipIncomingGeneration[sender] = generation;
 		seqdiff = 0;
 	} else if (seqdiff < 0) {   // we're ahead of the sequence?!
 		// This shouldn't happen unless the packet is corrupted or something.
 		Com_DPrintf("VoIP: misordered sequence! %d < %d!\n",
 		            sequence, clc.voipIncomingSequence[sender]);
-		// reset the decoder just in case.
-		opus_decoder_ctl(clc.opusDecoder[sender], OPUS_RESET_STATE);
+		// reset the bits just in case.
+		speex_bits_reset(&clc.speexDecoderBits[sender]);
 		seqdiff = 0;
-	} else if (seqdiff * VOIP_MAX_PACKET_SAMPLES*2 >= sizeof (decoded)) { // dropped more than we can handle?
+	} else if (seqdiff > 100) { // more than 2 seconds of audio dropped?
 		// just start over.
 		Com_DPrintf("VoIP: Dropped way too many (%d) frames from client #%d\n",
 		            seqdiff, sender);
-		opus_decoder_ctl(clc.opusDecoder[sender], OPUS_RESET_STATE);
+		speex_bits_reset(&clc.speexDecoderBits[sender]);
 		seqdiff = 0;
 	}
 
 	if (seqdiff != 0) {
 		Com_DPrintf("VoIP: Dropped %d frames from client #%d\n",
 		            seqdiff, sender);
-		// tell opus that we're missing frames...
+		// tell speex that we're missing frames...
 		for (i = 0; i < seqdiff; i++) {
-			assert((written + VOIP_MAX_PACKET_SAMPLES) * 2 < sizeof (decoded));
-			numSamples = opus_decode(clc.opusDecoder[sender], NULL, 0, decoded + written, VOIP_MAX_PACKET_SAMPLES, 0);
-			if ( numSamples <= 0 ) {
-				Com_DPrintf("VoIP: Error decoding frame %d from client #%d\n", i, sender);
-				continue;
-			}
-			written += numSamples;
+			assert((written + clc.speexFrameSize) * 2 < sizeof (decoded));
+			speex_decode_int(clc.speexDecoder[sender], NULL, decoded + written);
+			written += clc.speexFrameSize;
 		}
 	}
 
-	numSamples = opus_decode(clc.opusDecoder[sender], encoded, packetsize, decoded + written, ARRAY_LEN(decoded) - written, 0);
+	for (i = 0; i < frames; i++) {
+		char encoded[256];
+		const int len = MSG_ReadByte(msg);
+		if (len < 0) {
+			Com_DPrintf("VoIP: Short packet!\n");
+			break;
+		}
+		MSG_ReadData(msg, encoded, len);
 
-	if ( numSamples <= 0 ) {
-		Com_DPrintf("VoIP: Error decoding voip data from client #%d\n", sender);
-		numSamples = 0;
+		// shouldn't happen, but just in case...
+		if ((written + clc.speexFrameSize) * 2 > sizeof (decoded)) {
+			Com_DPrintf("VoIP: playback %d bytes, %d samples, %d frames\n",
+			            written * 2, written, i);
+			S_RawSamples(sender + 1, written, clc.speexSampleRate, 2, 1,
+			             (const byte *) decoded, clc.voipGain[sender]);
+			written = 0;
+		}
+
+		speex_bits_read_from(&clc.speexDecoderBits[sender], encoded, len);
+		speex_decode_int(clc.speexDecoder[sender],
+		                 &clc.speexDecoderBits[sender], decoded + written);
+
+		#if 0
+		static FILE *encio = NULL;
+		if (encio == NULL) encio = fopen("voip-incoming-encoded.bin", "wb");
+		if (encio != NULL) { fwrite(encoded, len, 1, encio); fflush(encio); }
+		static FILE *decio = NULL;
+		if (decio == NULL) decio = fopen("voip-incoming-decoded.bin", "wb");
+		if (decio != NULL) { fwrite(decoded+written, clc.speexFrameSize*2, 1, decio); fflush(decio); }
+		#endif
+
+		written += clc.speexFrameSize;
 	}
 
-	#if 0
-	static FILE *encio = NULL;
-	if (encio == NULL) encio = fopen("voip-incoming-encoded.bin", "wb");
-	if (encio != NULL) { fwrite(encoded, len, 1, encio); fflush(encio); }
-	static FILE *decio = NULL;
-	if (decio == NULL) decio = fopen("voip-incoming-decoded.bin", "wb");
-	if (decio != NULL) { fwrite(decoded+written, clc.speexFrameSize*2, 1, decio); fflush(decio); }
-	#endif
-
-	written += numSamples;
-
 	Com_DPrintf("VoIP: playback %d bytes, %d samples, %d frames\n",
-	            written * 2, written, frames);
+	            written * 2, written, i);
 
-	if(written > 0)
-		CL_PlayVoip(sender, written, (const byte *) decoded, flags);
+	if (written > 0) {
+		S_RawSamples(sender + 1, written, clc.speexSampleRate, 2, 1,
+		             (const byte *) decoded, clc.voipGain[sender]);
+	}
 
 	clc.voipIncomingSequence[sender] = sequence + frames;
 }
@@ -884,6 +854,19 @@ void CL_ParseServerMessage( msg_t *msg ) {
 
 		cmd = MSG_ReadByte( msg );
 
+		// See if this is an extension command after the EOF, which means we
+		//  got data that a legacy client should ignore.
+		if ((cmd == svc_EOF) && (MSG_LookaheadByte( msg ) == svc_extension)) {
+			SHOWNET( msg, "EXTENSION" );
+			MSG_ReadByte( msg );  // throw the svc_extension byte away.
+			cmd = MSG_ReadByte( msg );  // something legacy clients can't do!
+			// sometimes you get a svc_extension at end of stream...dangling
+			//  bits in the huffman decoder giving a bogus value?
+			if (cmd == -1) {
+				cmd = svc_EOF;
+			}
+		}
+
 		if (cmd == svc_EOF) {
 			SHOWNET( msg, "END OF MESSAGE" );
 			break;
@@ -900,7 +883,7 @@ void CL_ParseServerMessage( msg_t *msg ) {
 	// other commands
 		switch ( cmd ) {
 		default:
-			Com_Error (ERR_DROP,"CL_ParseServerMessage: Illegible server message");
+			Com_Error (ERR_DROP,"CL_ParseServerMessage: Illegible server message\n");
 			break;			
 		case svc_nop:
 			break;
@@ -916,14 +899,9 @@ void CL_ParseServerMessage( msg_t *msg ) {
 		case svc_download:
 			CL_ParseDownload( msg );
 			break;
-		case svc_voipSpeex:
+		case svc_voip:
 #ifdef USE_VOIP
-			CL_ParseVoip( msg, qtrue );
-#endif
-			break;
-		case svc_voipOpus:
-#ifdef USE_VOIP
-			CL_ParseVoip( msg, !clc.voipEnabled );
+			CL_ParseVoip( msg );
 #endif
 			break;
 		}

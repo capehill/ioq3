@@ -39,7 +39,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  *
  */
 
-#include "vm_local.h"
 #include "vm_powerpc_asm.h"
 
 #include <string.h>
@@ -65,6 +64,7 @@ struct powerpc_opcode
 };
 
 static const struct powerpc_opcode powerpc_opcodes[];
+static const int powerpc_num_opcodes;
 
 #define PPC_OPCODE_PPC			 1
 #define PPC_OPCODE_POWER		 2
@@ -111,6 +111,7 @@ struct powerpc_operand
 };
 
 static const struct powerpc_operand powerpc_operands[];
+static const unsigned int num_powerpc_operands;
 
 #define PPC_OPERAND_SIGNED (0x1)
 #define PPC_OPERAND_SIGNOPT (0x2)
@@ -374,7 +375,7 @@ static const struct powerpc_operand powerpc_operands[] =
   /* The SH field in an X or M form instruction.  */
 #define SH RS + 1
 #define SH_MASK (0x1f << 11)
-  /* The other UIMM field in an EVX form instruction.  */
+  /* The other UIMM field in a EVX form instruction.  */
 #define EVUIMM SH
   { 0x1f, 11, NULL, 0 },
 
@@ -388,6 +389,8 @@ static const struct powerpc_operand powerpc_operands[] =
 
 };
 
+static const unsigned int num_powerpc_operands =
+	(sizeof (powerpc_operands) / sizeof (powerpc_operands[0]));
 
 /* The functions used to insert and extract complicated operands.  */
 
@@ -657,19 +660,19 @@ insert_rbs (unsigned long insn,
 #define SC(op, sa, lk) (OP (op) | ((((unsigned long)(sa)) & 1) << 1) | ((lk) & 1))
 #define SC_MASK (OP_MASK | (((unsigned long)0x3ff) << 16) | (((unsigned long)1) << 1) | 1)
 
-/* A VX form instruction.  */
+/* An VX form instruction.  */
 #define VX(op, xop) (OP (op) | (((unsigned long)(xop)) & 0x7ff))
 
-/* The mask for a VX form instruction.  */
+/* The mask for an VX form instruction.  */
 #define VX_MASK	VX(0x3f, 0x7ff)
 
-/* A VA form instruction.  */
+/* An VA form instruction.  */
 #define VXA(op, xop) (OP (op) | (((unsigned long)(xop)) & 0x03f))
 
-/* The mask for a VA form instruction.  */
+/* The mask for an VA form instruction.  */
 #define VXA_MASK VXA(0x3f, 0x3f)
 
-/* A VXR form instruction.  */
+/* An VXR form instruction.  */
 #define VXR(op, xop, rc) (OP (op) | (((rc) & 1) << 10) | (((unsigned long)(xop)) & 0x3ff))
 
 /* The mask for a VXR form instruction.  */
@@ -1001,3 +1004,6 @@ static const struct powerpc_opcode powerpc_opcodes[] = {
 { "fsub",    A(63,20,0), AFRC_MASK,	PPCCOM,		{ FRT, FRA, FRB } },
 { "fneg",    XRC(63,40,0), XRA_MASK,	COM,		{ FRT, FRB } },
 };
+
+static const int powerpc_num_opcodes =
+	sizeof (powerpc_opcodes) / sizeof (powerpc_opcodes[0]);

@@ -281,7 +281,7 @@ int Pickup_Health (gentity_t *ent, gentity_t *other) {
 
 	// small and mega healths will go over the max
 #ifdef MISSIONPACK
-	if( bg_itemlist[other->client->ps.stats[STAT_PERSISTANT_POWERUP]].giTag == PW_GUARD ) {
+	if( other->client && bg_itemlist[other->client->ps.stats[STAT_PERSISTANT_POWERUP]].giTag == PW_GUARD ) {
 		max = other->client->ps.stats[STAT_MAX_HEALTH];
 	}
 	else
@@ -348,10 +348,6 @@ RespawnItem
 ===============
 */
 void RespawnItem( gentity_t *ent ) {
-	if (!ent) {
-		return;
-	}
-
 	// randomly select from teamed entities
 	if (ent->team) {
 		gentity_t	*master;
@@ -368,12 +364,8 @@ void RespawnItem( gentity_t *ent ) {
 
 		choice = rand() % count;
 
-		for (count = 0, ent = master; ent && count < choice; ent = ent->teamchain, count++)
+		for (count = 0, ent = master; count < choice; ent = ent->teamchain, count++)
 			;
-	}
-
-	if (!ent) {
-		return;
 	}
 
 	ent->r.contents = CONTENTS_TRIGGER;
@@ -668,7 +660,7 @@ void FinishSpawningItem( gentity_t *ent ) {
 
 	ent->r.contents = CONTENTS_TRIGGER;
 	ent->touch = Touch_Item;
-	// using an item causes it to respawn
+	// useing an item causes it to respawn
 	ent->use = Use_Item;
 
 	if ( ent->spawnflags & 1 ) {
@@ -732,11 +724,11 @@ void G_CheckTeamItems( void ) {
 		// check for the two flags
 		item = BG_FindItem( "Red Flag" );
 		if ( !item || !itemRegistered[ item - bg_itemlist ] ) {
-			G_Printf( S_COLOR_YELLOW "WARNING: No team_CTF_redflag in map\n" );
+			G_Printf( S_COLOR_YELLOW "WARNING: No team_CTF_redflag in map" );
 		}
 		item = BG_FindItem( "Blue Flag" );
 		if ( !item || !itemRegistered[ item - bg_itemlist ] ) {
-			G_Printf( S_COLOR_YELLOW "WARNING: No team_CTF_blueflag in map\n" );
+			G_Printf( S_COLOR_YELLOW "WARNING: No team_CTF_blueflag in map" );
 		}
 	}
 #ifdef MISSIONPACK
@@ -746,15 +738,15 @@ void G_CheckTeamItems( void ) {
 		// check for all three flags
 		item = BG_FindItem( "Red Flag" );
 		if ( !item || !itemRegistered[ item - bg_itemlist ] ) {
-			G_Printf( S_COLOR_YELLOW "WARNING: No team_CTF_redflag in map\n" );
+			G_Printf( S_COLOR_YELLOW "WARNING: No team_CTF_redflag in map" );
 		}
 		item = BG_FindItem( "Blue Flag" );
 		if ( !item || !itemRegistered[ item - bg_itemlist ] ) {
-			G_Printf( S_COLOR_YELLOW "WARNING: No team_CTF_blueflag in map\n" );
+			G_Printf( S_COLOR_YELLOW "WARNING: No team_CTF_blueflag in map" );
 		}
 		item = BG_FindItem( "Neutral Flag" );
 		if ( !item || !itemRegistered[ item - bg_itemlist ] ) {
-			G_Printf( S_COLOR_YELLOW "WARNING: No team_CTF_neutralflag in map\n" );
+			G_Printf( S_COLOR_YELLOW "WARNING: No team_CTF_neutralflag in map" );
 		}
 	}
 
@@ -765,13 +757,13 @@ void G_CheckTeamItems( void ) {
 		ent = NULL;
 		ent = G_Find( ent, FOFS(classname), "team_redobelisk" );
 		if( !ent ) {
-			G_Printf( S_COLOR_YELLOW "WARNING: No team_redobelisk in map\n" );
+			G_Printf( S_COLOR_YELLOW "WARNING: No team_redobelisk in map" );
 		}
 
 		ent = NULL;
 		ent = G_Find( ent, FOFS(classname), "team_blueobelisk" );
 		if( !ent ) {
-			G_Printf( S_COLOR_YELLOW "WARNING: No team_blueobelisk in map\n" );
+			G_Printf( S_COLOR_YELLOW "WARNING: No team_blueobelisk in map" );
 		}
 	}
 
@@ -782,19 +774,19 @@ void G_CheckTeamItems( void ) {
 		ent = NULL;
 		ent = G_Find( ent, FOFS(classname), "team_redobelisk" );
 		if( !ent ) {
-			G_Printf( S_COLOR_YELLOW "WARNING: No team_redobelisk in map\n" );
+			G_Printf( S_COLOR_YELLOW "WARNING: No team_redobelisk in map" );
 		}
 
 		ent = NULL;
 		ent = G_Find( ent, FOFS(classname), "team_blueobelisk" );
 		if( !ent ) {
-			G_Printf( S_COLOR_YELLOW "WARNING: No team_blueobelisk in map\n" );
+			G_Printf( S_COLOR_YELLOW "WARNING: No team_blueobelisk in map" );
 		}
 
 		ent = NULL;
 		ent = G_Find( ent, FOFS(classname), "team_neutralobelisk" );
 		if( !ent ) {
-			G_Printf( S_COLOR_YELLOW "WARNING: No team_neutralobelisk in map\n" );
+			G_Printf( S_COLOR_YELLOW "WARNING: No team_neutralobelisk in map" );
 		}
 	}
 #endif
@@ -961,8 +953,8 @@ void G_RunItem( gentity_t *ent ) {
 	int			contents;
 	int			mask;
 
-	// if its groundentity has been set to none, it may have been pushed off an edge
-	if ( ent->s.groundEntityNum == ENTITYNUM_NONE ) {
+	// if groundentity has been set to -1, it may have been pushed off an edge
+	if ( ent->s.groundEntityNum == -1 ) {
 		if ( ent->s.pos.trType != TR_GRAVITY ) {
 			ent->s.pos.trType = TR_GRAVITY;
 			ent->s.pos.trTime = level.time;

@@ -186,7 +186,7 @@ int		CG_PointContents( const vec3_t point, int passEntityNum ) {
 			continue;
 		}
 
-		contents |= trap_CM_TransformedPointContents( point, cmodel, cent->lerpOrigin, cent->lerpAngles );
+		contents |= trap_CM_TransformedPointContents( point, cmodel, ent->origin, ent->angles );
 	}
 
 	return contents;
@@ -283,17 +283,19 @@ static void CG_TouchItem( centity_t *cent ) {
 	// We don't predict touching our own flag
 #ifdef MISSIONPACK
 	if( cgs.gametype == GT_1FCTF ) {
-		if( item->giType == IT_TEAM && item->giTag != PW_NEUTRALFLAG ) {
+		if( item->giTag != PW_NEUTRALFLAG ) {
 			return;
 		}
 	}
-#endif
+	if( cgs.gametype == GT_CTF || cgs.gametype == GT_HARVESTER ) {
+#else
 	if( cgs.gametype == GT_CTF ) {
+#endif
 		if (cg.predictedPlayerState.persistant[PERS_TEAM] == TEAM_RED &&
-			item->giType == IT_TEAM && item->giTag == PW_REDFLAG)
+			item->giTag == PW_REDFLAG)
 			return;
 		if (cg.predictedPlayerState.persistant[PERS_TEAM] == TEAM_BLUE &&
-			item->giType == IT_TEAM && item->giTag == PW_BLUEFLAG)
+			item->giTag == PW_BLUEFLAG)
 			return;
 	}
 
@@ -306,7 +308,7 @@ static void CG_TouchItem( centity_t *cent ) {
 	// don't touch it again this prediction
 	cent->miscTime = cg.time;
 
-	// if it's a weapon, give them some predicted ammo so the autoswitch will work
+	// if its a weapon, give them some predicted ammo so the autoswitch will work
 	if ( item->giType == IT_WEAPON ) {
 		cg.predictedPlayerState.stats[ STAT_WEAPONS ] |= 1 << item->giTag;
 		if ( !cg.predictedPlayerState.ammo[ item->giTag ] ) {
@@ -534,9 +536,9 @@ void CG_PredictPlayerState( void ) {
 				}
 				cg.thisFrameTeleport = qfalse;
 			} else {
-				vec3_t adjusted, new_angles;
+				vec3_t	adjusted;
 				CG_AdjustPositionForMover( cg.predictedPlayerState.origin, 
-				cg.predictedPlayerState.groundEntityNum, cg.physicsTime, cg.oldTime, adjusted, cg.predictedPlayerState.viewangles, new_angles);
+					cg.predictedPlayerState.groundEntityNum, cg.physicsTime, cg.oldTime, adjusted );
 
 				if ( cg_showmiss.integer ) {
 					if (!VectorCompare( oldPlayerState.origin, adjusted )) {
@@ -604,7 +606,7 @@ void CG_PredictPlayerState( void ) {
 	// adjust for the movement of the groundentity
 	CG_AdjustPositionForMover( cg.predictedPlayerState.origin, 
 		cg.predictedPlayerState.groundEntityNum, 
-		cg.physicsTime, cg.time, cg.predictedPlayerState.origin, cg.predictedPlayerState.viewangles, cg.predictedPlayerState.viewangles);
+		cg.physicsTime, cg.time, cg.predictedPlayerState.origin );
 
 	if ( cg_showmiss.integer ) {
 		if (cg.predictedPlayerState.eventSequence > oldPlayerState.eventSequence + MAX_PS_EVENTS) {

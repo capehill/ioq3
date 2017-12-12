@@ -35,8 +35,8 @@ GetClientState
 */
 static void GetClientState( uiClientState_t *state ) {
 	state->connectPacketCount = clc.connectPacketCount;
-	state->connState = clc.state;
-	Q_strncpyz( state->servername, clc.servername, sizeof( state->servername ) );
+	state->connState = cls.state;
+	Q_strncpyz( state->servername, cls.servername, sizeof( state->servername ) );
 	Q_strncpyz( state->updateInfoString, cls.updateInfoString, sizeof( state->updateInfoString ) );
 	Q_strncpyz( state->messageString, clc.serverMessage, sizeof( state->messageString ) );
 	state->clientNum = cl.snap.ps.clientNum;
@@ -146,7 +146,7 @@ static int LAN_AddServer(int source, const char *name, const char *address) {
 			break;
 	}
 	if (servers && *count < max) {
-		NET_StringToAdr( address, &adr, NA_UNSPEC );
+		NET_StringToAdr( address, &adr, NA_IP );
 		for ( i = 0; i < *count; i++ ) {
 			if (NET_CompareAdr(servers[i].adr, adr)) {
 				break;
@@ -190,7 +190,7 @@ static void LAN_RemoveServer(int source, const char *addr) {
 	}
 	if (servers) {
 		netadr_t comp;
-		NET_StringToAdr( addr, &comp, NA_UNSPEC );
+		NET_StringToAdr( addr, &comp, NA_IP );
 		for (i = 0; i < *count; i++) {
 			if (NET_CompareAdr( comp, servers[i].adr)) {
 				int j = i;
@@ -296,10 +296,8 @@ static void LAN_GetServerInfo( int source, int n, char *buf, int buflen ) {
 		Info_SetValueForKey( info, "game", server->game);
 		Info_SetValueForKey( info, "gametype", va("%i",server->gameType));
 		Info_SetValueForKey( info, "nettype", va("%i",server->netType));
-		Info_SetValueForKey( info, "addr", NET_AdrToStringwPort(server->adr));
+		Info_SetValueForKey( info, "addr", NET_AdrToString(server->adr));
 		Info_SetValueForKey( info, "punkbuster", va("%i", server->punkbuster));
-		Info_SetValueForKey( info, "g_needpass", va("%i", server->g_needpass));
-		Info_SetValueForKey( info, "g_humanplayers", va("%i", server->g_humanplayers));
 		Q_strncpyz(buf, info, buflen);
 	} else {
 		if (buf) {
@@ -627,8 +625,8 @@ static void Key_GetBindingBuf( int keynum, char *buf, int buflen ) {
 CLUI_GetCDKey
 ====================
 */
-static void CLUI_GetCDKey( char *buf, int buflen ) {
 #ifndef STANDALONE
+static void CLUI_GetCDKey( char *buf, int buflen ) {
 	cvar_t	*fs;
 	fs = Cvar_Get ("fs_game", "", CVAR_INIT|CVAR_SYSTEMINFO );
 	if (UI_usesUniqueCDKey() && fs && fs->string[0] != 0) {
@@ -638,9 +636,6 @@ static void CLUI_GetCDKey( char *buf, int buflen ) {
 		Com_Memcpy( buf, cl_cdkey, 16);
 		buf[16] = 0;
 	}
-#else
-	*buf = 0;
-#endif
 }
 
 
@@ -649,7 +644,6 @@ static void CLUI_GetCDKey( char *buf, int buflen ) {
 CLUI_SetCDKey
 ====================
 */
-#ifndef STANDALONE
 static void CLUI_SetCDKey( char *buf ) {
 	cvar_t	*fs;
 	fs = Cvar_Get ("fs_game", "", CVAR_INIT|CVAR_SYSTEMINFO );
@@ -731,7 +725,7 @@ intptr_t CL_UISystemCalls( intptr_t *args ) {
 		return 0;
 
 	case UI_CVAR_SET:
-		Cvar_SetSafe( VMA(1), VMA(2) );
+		Cvar_Set( VMA(1), VMA(2) );
 		return 0;
 
 	case UI_CVAR_VARIABLEVALUE:
@@ -742,7 +736,7 @@ intptr_t CL_UISystemCalls( intptr_t *args ) {
 		return 0;
 
 	case UI_CVAR_SETVALUE:
-		Cvar_SetValueSafe( VMA(1), VMF(2) );
+		Cvar_SetValue( VMA(1), VMF(2) );
 		return 0;
 
 	case UI_CVAR_RESET:
@@ -750,7 +744,7 @@ intptr_t CL_UISystemCalls( intptr_t *args ) {
 		return 0;
 
 	case UI_CVAR_CREATE:
-		Cvar_Register( NULL, VMA(1), VMA(2), args[3] );
+		Cvar_Get( VMA(1), VMA(2), args[3] );
 		return 0;
 
 	case UI_CVAR_INFOSTRINGBUFFER:
@@ -765,7 +759,7 @@ intptr_t CL_UISystemCalls( intptr_t *args ) {
 		return 0;
 
 	case UI_CMD_EXECUTETEXT:
-		if(args[1] == EXEC_NOW
+		if(args[1] == 0
 		&& (!strncmp(VMA(2), "snd_restart", 11)
 		|| !strncmp(VMA(2), "vid_restart", 11)
 		|| !strncmp(VMA(2), "quit", 5)))
@@ -780,7 +774,7 @@ intptr_t CL_UISystemCalls( intptr_t *args ) {
 		return FS_FOpenFileByMode( VMA(1), VMA(2), args[3] );
 
 	case UI_FS_READ:
-		FS_Read( VMA(1), args[2], args[3] );
+		FS_Read2( VMA(1), args[2], args[3] );
 		return 0;
 
 	case UI_FS_WRITE:
@@ -970,7 +964,9 @@ intptr_t CL_UISystemCalls( intptr_t *args ) {
 		return Hunk_MemoryRemaining();
 
 	case UI_GET_CDKEY:
+#ifndef STANDALONE
 		CLUI_GetCDKey( VMA(1), args[2] );
+#endif
 		return 0;
 
 	case UI_SET_CDKEY:
@@ -1060,7 +1056,17 @@ intptr_t CL_UISystemCalls( intptr_t *args ) {
 		return 0;
 
 	case UI_VERIFY_CDKEY:
+#ifndef STANDALONE
 		return CL_CDKeyValidate(VMA(1), VMA(2));
+#else
+
+#ifdef OPEN_ARENA
+		// HACK TODO FIXME: ioquake3 baseline is newer than one used with OpenArena!
+		return qtrue;
+#endif
+		
+		return 0;
+#endif
 		
 	default:
 		Com_Error( ERR_DROP, "Bad UI system trap: %ld", (long int) args[0] );
@@ -1098,14 +1104,13 @@ void CL_InitUI( void ) {
 	vmInterpret_t		interpret;
 
 	// load the dll or bytecode
-	interpret = Cvar_VariableValue("vm_ui");
-	if(cl_connectedToPureServer)
-	{
+	if ( cl_connectedToPureServer != 0 ) {
 		// if sv_pure is set we only allow qvms to be loaded
-		if(interpret != VMI_COMPILED && interpret != VMI_BYTECODE)
-			interpret = VMI_COMPILED;
+		interpret = VMI_COMPILED;
 	}
-
+	else {
+		interpret = Cvar_VariableValue( "vm_ui" );
+	}
 	uivm = VM_Create( "ui", CL_UISystemCalls, interpret );
 	if ( !uivm ) {
 		Com_Error( ERR_FATAL, "VM_Create on UI failed" );
@@ -1116,20 +1121,20 @@ void CL_InitUI( void ) {
 	if (v == UI_OLD_API_VERSION) {
 //		Com_Printf(S_COLOR_YELLOW "WARNING: loading old Quake III Arena User Interface version %d\n", v );
 		// init for this gamestate
-		VM_Call( uivm, UI_INIT, (clc.state >= CA_AUTHORIZING && clc.state < CA_ACTIVE));
+		VM_Call( uivm, UI_INIT, (cls.state >= CA_AUTHORIZING && cls.state < CA_ACTIVE));
 	}
 	else if (v != UI_API_VERSION) {
-		// Free uivm now, so UI_SHUTDOWN doesn't get called later.
-		VM_Free( uivm );
-		uivm = NULL;
-
 		Com_Error( ERR_DROP, "User Interface is version %d, expected %d", v, UI_API_VERSION );
 		cls.uiStarted = qfalse;
 	}
 	else {
 		// init for this gamestate
-		VM_Call( uivm, UI_INIT, (clc.state >= CA_AUTHORIZING && clc.state < CA_ACTIVE) );
+		VM_Call( uivm, UI_INIT, (cls.state >= CA_AUTHORIZING && cls.state < CA_ACTIVE) );
 	}
+
+	// reset any CVAR_CHEAT cvars registered by ui
+	if ( !clc.demoplaying && !cl_connectedToCheatServer ) 
+		Cvar_SetCheatState();
 }
 
 #ifndef STANDALONE

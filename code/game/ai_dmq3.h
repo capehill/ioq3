@@ -34,7 +34,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 void BotSetupDeathmatchAI(void);
 //shutdown the deathmatch AI
 void BotShutdownDeathmatchAI(void);
-//let the bot live within its deathmatch AI net
+//let the bot live within it's deathmatch AI net
 void BotDeathmatchAI(bot_state_t *bs, float thinktime);
 //free waypoints
 void BotFreeWaypoints(bot_waypoint_t *wp);
@@ -72,7 +72,7 @@ void BotSetUserInfo(bot_state_t *bs, char *key, char *value);
 void BotSetTeamStatus(bot_state_t *bs);
 //returns the name of the client
 char *ClientName(int client, char *name, int size);
-//returns a simplified client name
+//returns an simplyfied client name
 char *EasyClientName(int client, char *name, int size);
 //returns the skin used by the client
 char *ClientSkin(int client, char *skin, int size);

@@ -180,15 +180,11 @@ static void SV_Map_f( void ) {
 		// may not set sv_maxclients directly, always set latched
 		Cvar_SetLatched( "sv_maxclients", "8" );
 		cmd += 2;
-		if (!Q_stricmp( cmd, "devmap" ) ) {
-			cheat = qtrue;
-		} else {
-			cheat = qfalse;
-		}
+		cheat = qfalse;
 		killBots = qtrue;
 	}
 	else {
-		if ( !Q_stricmp( cmd, "devmap" ) ) {
+		if ( !Q_stricmp( cmd, "devmap" ) || !Q_stricmp( cmd, "spdevmap" ) ) {
 			cheat = qtrue;
 			killBots = qtrue;
 		} else {
@@ -282,15 +278,6 @@ static void SV_MapRestart_f( void ) {
 	sv.serverId = com_frameTime;
 	Cvar_Set( "sv_serverid", va("%i", sv.serverId ) );
 
-	// if a map_restart occurs while a client is changing maps, we need
-	// to give them the correct time so that when they finish loading
-	// they don't violate the backwards time check in cl_cgame.c
-	for (i=0 ; i<sv_maxclients->integer ; i++) {
-		if (svs.clients[i].state == CS_PRIMED) {
-			svs.clients[i].oldServerTime = sv.restartTime;
-		}
-	}
-
 	// reset all the vm data in place without changing memory allocation
 	// note that we do NOT set sv.state = SS_LOADING, so configstrings that
 	// had been changed from their default values will generate broadcast updates
@@ -338,15 +325,9 @@ static void SV_MapRestart_f( void ) {
 			continue;
 		}
 
-		if(client->state == CS_ACTIVE)
-			SV_ClientEnterWorld(client, &client->lastUsercmd);
-		else
-		{
-			// If we don't reset client->lastUsercmd and are restarting during map load,
-			// the client will hang because we'll use the last Usercmd from the previous map,
-			// which is wrong obviously.
-			SV_ClientEnterWorld(client, NULL);
-		}
+		client->state = CS_ACTIVE;
+
+		SV_ClientEnterWorld( client, &client->lastUsercmd );
 	}	
 
 	// run another frame to allow things to look at all the players
@@ -361,7 +342,7 @@ static void SV_MapRestart_f( void ) {
 ==================
 SV_Kick_f
 
-Kick a user off of the server
+Kick a user off of the server  FIXME: move to game
 ==================
 */
 static void SV_Kick_f( void ) {
@@ -408,102 +389,7 @@ static void SV_Kick_f( void ) {
 		return;
 	}
 	if( cl->netchan.remoteAddress.type == NA_LOOPBACK ) {
-		Com_Printf("Cannot kick host player\n");
-		return;
-	}
-
-	SV_DropClient( cl, "was kicked" );
-	cl->lastPacketTime = svs.time;	// in case there is a funny zombie
-}
-
-/*
-==================
-SV_KickBots_f
-
-Kick all bots off of the server
-==================
-*/
-static void SV_KickBots_f( void ) {
-	client_t	*cl;
-	int			i;
-
-	// make sure server is running
-	if( !com_sv_running->integer ) {
-		Com_Printf("Server is not running.\n");
-		return;
-	}
-
-	for( i = 0, cl = svs.clients; i < sv_maxclients->integer; i++, cl++ ) {
-		if( !cl->state ) {
-			continue;
-		}
-
-		if( cl->netchan.remoteAddress.type != NA_BOT ) {
-			continue;
-		}
-
-		SV_DropClient( cl, "was kicked" );
-		cl->lastPacketTime = svs.time; // in case there is a funny zombie
-	}
-}
-/*
-==================
-SV_KickAll_f
-
-Kick all users off of the server
-==================
-*/
-static void SV_KickAll_f( void ) {
-	client_t *cl;
-	int i;
-
-	// make sure server is running
-	if( !com_sv_running->integer ) {
-		Com_Printf( "Server is not running.\n" );
-		return;
-	}
-
-	for( i = 0, cl = svs.clients; i < sv_maxclients->integer; i++, cl++ ) {
-		if( !cl->state ) {
-			continue;
-		}
-
-		if( cl->netchan.remoteAddress.type == NA_LOOPBACK ) {
-			continue;
-		}
-
-		SV_DropClient( cl, "was kicked" );
-		cl->lastPacketTime = svs.time; // in case there is a funny zombie
-	}
-}
-
-/*
-==================
-SV_KickNum_f
-
-Kick a user off of the server
-==================
-*/
-static void SV_KickNum_f( void ) {
-	client_t	*cl;
-
-	// make sure server is running
-	if ( !com_sv_running->integer ) {
-		Com_Printf( "Server is not running.\n" );
-		return;
-	}
-
-	if ( Cmd_Argc() != 2 ) {
-		Com_Printf ("Usage: %s <client number>\n", Cmd_Argv(0));
-		return;
-	}
-
-	cl = SV_GetPlayerByNum();
-	if ( !cl ) {
-		return;
-	}
-	if( cl->netchan.remoteAddress.type == NA_LOOPBACK ) {
-		Com_Printf("Cannot kick host player\n");
+		SV_SendServerCommand(NULL, "print \"%s\"", "Cannot kick host player\n");
 		return;
 	}
 
@@ -543,9 +429,17 @@ static void SV_Ban_f( void ) {
 	}
 
 	if( cl->netchan.remoteAddress.type == NA_LOOPBACK ) {
-		Com_Printf("Cannot kick host player\n");
+		SV_SendServerCommand(NULL, "print \"%s\"", "Cannot kick host player\n");
 		return;
 	}
+
+#ifdef OPEN_ARENA
+	if (strlen(AUTHORIZE_SERVER_NAME) < 1)
+	{
+		Com_Printf("Ban function disabled due to lack of authorizing server.\n");
+		return;	   
+	}
+#endif
 
 	// look up the authorize server's IP
 	if ( !svs.authorizeAddress.ip[0] && svs.authorizeAddress.type != NA_BAD ) {
@@ -597,9 +491,17 @@ static void SV_BanNum_f( void ) {
 		return;
 	}
 	if( cl->netchan.remoteAddress.type == NA_LOOPBACK ) {
-		Com_Printf("Cannot kick host player\n");
+		SV_SendServerCommand(NULL, "print \"%s\"", "Cannot kick host player\n");
 		return;
 	}
+
+#ifdef OPEN_ARENA
+	if (strlen(AUTHORIZE_SERVER_NAME) < 1)
+	{
+		Com_Printf("Ban function disabled due to lack of authorizing server.\n");
+		return;
+	}
+#endif
 
 	// look up the authorize server's IP
 	if ( !svs.authorizeAddress.ip[0] && svs.authorizeAddress.type != NA_BAD ) {
@@ -632,24 +534,19 @@ SV_RehashBans_f
 Load saved bans from file.
 ==================
 */
-static void SV_RehashBans_f(void)
+void SV_RehashBans_f(void)
 {
 	int index, filelen;
 	fileHandle_t readfrom;
 	char *textbuf, *curpos, *maskpos, *newlinepos, *endpos;
 	char filepath[MAX_QPATH];
 	
-	// make sure server is running
-	if ( !com_sv_running->integer ) {
-		return;
-	}
-	
 	serverBansCount = 0;
 	
-	if(!sv_banFile->string || !*sv_banFile->string)
-		return;
-
-	Com_sprintf(filepath, sizeof(filepath), "%s/%s", FS_GetCurrentGameDir(), sv_banFile->string);
+	if(!(curpos = Cvar_VariableString("fs_game")) || !*curpos)
+		curpos = BASEGAME;
+	
+	Com_sprintf(filepath, sizeof(filepath), "%s/%s", curpos, SERVER_BANFILE);
 
 	if((filelen = FS_SV_FOpenFileRead(filepath, &readfrom)) >= 0)
 	{
@@ -688,16 +585,16 @@ static void SV_RehashBans_f(void)
 			
 			if(NET_StringToAdr(curpos + 2, &serverBans[index].ip, NA_UNSPEC))
 			{
-				serverBans[index].isexception = (curpos[0] != '0');
+				serverBans[index].isexception = !(curpos[0] == '0');
 				serverBans[index].subnet = atoi(maskpos);
 				
 				if(serverBans[index].ip.type == NA_IP &&
-				   (serverBans[index].subnet < 1 || serverBans[index].subnet > 32))
+				   (serverBans[index].subnet < 0 || serverBans[index].subnet > 32))
 				{
 					serverBans[index].subnet = 32;
 				}
 				else if(serverBans[index].ip.type == NA_IP6 &&
-					(serverBans[index].subnet < 1 || serverBans[index].subnet > 128))
+					(serverBans[index].subnet < 0 || serverBans[index].subnet > 128))
 				{
 					serverBans[index].subnet = 128;
 				}
@@ -714,23 +611,168 @@ static void SV_RehashBans_f(void)
 
 /*
 ==================
-SV_WriteBans
+SV_BanAddr_f
 
-Save bans to file.
+Ban a user from being able to play on this server based on his ip address.
 ==================
 */
-static void SV_WriteBans(void)
+
+static void SV_AddBanToList(qboolean isexception)
 {
-	int index;
+	char *banstring, *suffix;
+	netadr_t ip;
+	int argc, mask;
 	fileHandle_t writeto;
-	char filepath[MAX_QPATH];
 	
-	if(!sv_banFile->string || !*sv_banFile->string)
+	argc = Cmd_Argc();
+	
+	if(argc < 2 || argc > 3)
+	{
+		Com_Printf ("Usage: %s (ip[/subnet] | clientnum [subnet])\n", Cmd_Argv(0));
+		return;
+	}
+
+	if(serverBansCount > sizeof(serverBans) / sizeof(*serverBans))
+	{
+		Com_Printf ("Error: Maximum number of bans/exceptions exceeded.\n");
+		return;
+	}
+
+	banstring = Cmd_Argv(1);
+	
+	if(strchr(banstring, '.') || strchr(banstring, ':'))
+	{
+		// This is an ip address, not a client num.
+		
+		// Look for a CIDR-Notation suffix
+		suffix = strchr(banstring, '/');
+		if(suffix)
+		{
+			*suffix = '\0';
+			suffix++;
+		}
+		
+		if(!NET_StringToAdr(banstring, &ip, NA_UNSPEC))
+		{
+			Com_Printf("Error: Invalid address %s\n", banstring);
+			return;
+		}
+	}
+	else
+	{
+		client_t *cl;
+		
+		// client num.
+		if(!com_sv_running->integer)
+		{
+			Com_Printf("Server is not running.\n");
+			return;
+		}
+		
+		cl = SV_GetPlayerByNum();
+
+		if(!cl)
+		{
+			Com_Printf("Error: Playernum %s does not exist.\n", Cmd_Argv(1));
+			return;
+		}
+		
+		ip = cl->netchan.remoteAddress;
+		
+		if(argc == 3)
+			suffix = Cmd_Argv(2);
+		else
+			suffix = NULL;
+	}
+
+	if(ip.type != NA_IP && ip.type != NA_IP6)
+	{
+		Com_Printf("Error: Can ban players connected via the internet only.\n");
+		return;
+	}
+
+	if(suffix)
+	{
+		mask = atoi(suffix);
+		
+		if(ip.type == NA_IP)
+		{
+			if(mask < 0 || mask > 32)
+				mask = 32;
+		}
+		else
+		{
+			if(mask < 0 || mask > 128)
+				mask = 128;
+		}
+	}
+	else if(ip.type == NA_IP)
+		mask = 32;
+	else
+		mask = 128;
+	
+	serverBans[serverBansCount].ip = ip;
+	serverBans[serverBansCount].subnet = mask;
+	serverBans[serverBansCount].isexception = isexception;
+	
+	Com_Printf("Added %s: %s/%d\n", isexception ? "ban exception" : "ban",
+		   NET_AdrToString(ip), mask);
+
+	// Write out the ban information.
+	if((writeto = FS_FOpenFileAppend(SERVER_BANFILE)))
+	{
+		char writebuf[128];
+		
+		Com_sprintf(writebuf, sizeof(writebuf), "%d %s %d\n", isexception, NET_AdrToString(ip), mask);
+		FS_Write(writebuf, strlen(writebuf), writeto);
+		FS_FCloseFile(writeto);
+	}
+	
+	serverBansCount++;
+}
+
+static void SV_DelBanFromList(qboolean isexception)
+{
+	int index, count, todel;
+	fileHandle_t writeto;
+	
+	if(Cmd_Argc() != 2)
+	{
+		Com_Printf ("Usage: %s <num>\n", Cmd_Argv(0));
+		return;
+	}
+
+	todel = atoi(Cmd_Argv(1));
+
+	if(todel < 0 || todel > serverBansCount)
 		return;
 	
-	Com_sprintf(filepath, sizeof(filepath), "%s/%s", FS_GetCurrentGameDir(), sv_banFile->string);
-
-	if((writeto = FS_SV_FOpenFileWrite(filepath)))
+	for(index = count = 0; index < serverBansCount; index++)
+	{
+		if(serverBans[index].isexception == isexception)
+		{
+			count++;
+			
+			if(count == todel)
+				break;
+		}
+	}
+	
+	if(index == serverBansCount - 1)
+		serverBansCount--;
+	else if(index < sizeof(serverBans) / sizeof(*serverBans) - 1)
+	{
+		memmove(serverBans + index, serverBans + index + 1, (serverBansCount - index - 1) * sizeof(*serverBans));
+		serverBansCount--;
+	}
+	else
+	{
+		Com_Printf("Error: No such entry #%d\n", todel);
+		return;
+	}
+	
+	// Write out the ban information.
+	if((writeto = FS_FOpenFileWrite(SERVER_BANFILE)))
 	{
 		char writebuf[128];
 		serverBan_t *curban;
@@ -748,328 +790,10 @@ static void SV_WriteBans(void)
 	}
 }
 
-/*
-==================
-SV_DelBanEntryFromList
-
-Remove a ban or an exception from the list.
-==================
-*/
-
-static qboolean SV_DelBanEntryFromList(int index)
-{
-	if(index == serverBansCount - 1)
-		serverBansCount--;
-	else if(index < ARRAY_LEN(serverBans) - 1)
-	{
-		memmove(serverBans + index, serverBans + index + 1, (serverBansCount - index - 1) * sizeof(*serverBans));
-		serverBansCount--;
-	}
-	else
-		return qtrue;
-
-	return qfalse;
-}
-
-/*
-==================
-SV_ParseCIDRNotation
-
-Parse a CIDR notation type string and return a netadr_t and suffix by reference
-==================
-*/
-
-static qboolean SV_ParseCIDRNotation(netadr_t *dest, int *mask, char *adrstr)
-{
-	char *suffix;
-	
-	suffix = strchr(adrstr, '/');
-	if(suffix)
-	{
-		*suffix = '\0';
-		suffix++;
-	}
-
-	if(!NET_StringToAdr(adrstr, dest, NA_UNSPEC))
-		return qtrue;
-
-	if(suffix)
-	{
-		*mask = atoi(suffix);
-		
-		if(dest->type == NA_IP)
-		{
-			if(*mask < 1 || *mask > 32)
-				*mask = 32;
-		}
-		else
-		{
-			if(*mask < 1 || *mask > 128)
-				*mask = 128;
-		}
-	}
-	else if(dest->type == NA_IP)
-		*mask = 32;
-	else
-		*mask = 128;
-	
-	return qfalse;
-}
-
-/*
-==================
-SV_AddBanToList
-
-Ban a user from being able to play on this server based on his ip address.
-==================
-*/
-
-static void SV_AddBanToList(qboolean isexception)
-{
-	char *banstring;
-	char addy2[NET_ADDRSTRMAXLEN];
-	netadr_t ip;
-	int index, argc, mask;
-	serverBan_t *curban;
-
-	// make sure server is running
-	if ( !com_sv_running->integer ) {
-		Com_Printf( "Server is not running.\n" );
-		return;
-	}
-
-	argc = Cmd_Argc();
-	
-	if(argc < 2 || argc > 3)
-	{
-		Com_Printf ("Usage: %s (ip[/subnet] | clientnum [subnet])\n", Cmd_Argv(0));
-		return;
-	}
-
-	if(serverBansCount >= ARRAY_LEN(serverBans))
-	{
-		Com_Printf ("Error: Maximum number of bans/exceptions exceeded.\n");
-		return;
-	}
-
-	banstring = Cmd_Argv(1);
-	
-	if(strchr(banstring, '.') || strchr(banstring, ':'))
-	{
-		// This is an ip address, not a client num.
-		
-		if(SV_ParseCIDRNotation(&ip, &mask, banstring))
-		{
-			Com_Printf("Error: Invalid address %s\n", banstring);
-			return;
-		}
-	}
-	else
-	{
-		client_t *cl;
-		
-		// client num.
-		
-		cl = SV_GetPlayerByNum();
-
-		if(!cl)
-		{
-			Com_Printf("Error: Playernum %s does not exist.\n", Cmd_Argv(1));
-			return;
-		}
-		
-		ip = cl->netchan.remoteAddress;
-		
-		if(argc == 3)
-		{
-			mask = atoi(Cmd_Argv(2));
-			
-			if(ip.type == NA_IP)
-			{
-				if(mask < 1 || mask > 32)
-					mask = 32;
-			}
-			else
-			{
-				if(mask < 1 || mask > 128)
-					mask = 128;
-			}
-		}
-		else
-			mask = (ip.type == NA_IP6) ? 128 : 32;
-	}
-
-	if(ip.type != NA_IP && ip.type != NA_IP6)
-	{
-		Com_Printf("Error: Can ban players connected via the internet only.\n");
-		return;
-	}
-
-	// first check whether a conflicting ban exists that would supersede the new one.
-	for(index = 0; index < serverBansCount; index++)
-	{
-		curban = &serverBans[index];
-		
-		if(curban->subnet <= mask)
-		{
-			if((curban->isexception || !isexception) && NET_CompareBaseAdrMask(curban->ip, ip, curban->subnet))
-			{
-				Q_strncpyz(addy2, NET_AdrToString(ip), sizeof(addy2));
-				
-				Com_Printf("Error: %s %s/%d supersedes %s %s/%d\n", curban->isexception ? "Exception" : "Ban",
-					   NET_AdrToString(curban->ip), curban->subnet,
-					   isexception ? "exception" : "ban", addy2, mask);
-				return;
-			}
-		}
-		if(curban->subnet >= mask)
-		{
-			if(!curban->isexception && isexception && NET_CompareBaseAdrMask(curban->ip, ip, mask))
-			{
-				Q_strncpyz(addy2, NET_AdrToString(curban->ip), sizeof(addy2));
-			
-				Com_Printf("Error: %s %s/%d supersedes already existing %s %s/%d\n", isexception ? "Exception" : "Ban",
-					   NET_AdrToString(ip), mask,
-					   curban->isexception ? "exception" : "ban", addy2, curban->subnet);
-				return;
-			}
-		}
-	}
-
-	// now delete bans that are superseded by the new one
-	index = 0;
-	while(index < serverBansCount)
-	{
-		curban = &serverBans[index];
-		
-		if(curban->subnet > mask && (!curban->isexception || isexception) && NET_CompareBaseAdrMask(curban->ip, ip, mask))
-			SV_DelBanEntryFromList(index);
-		else
-			index++;
-	}
-
-	serverBans[serverBansCount].ip = ip;
-	serverBans[serverBansCount].subnet = mask;
-	serverBans[serverBansCount].isexception = isexception;
-	
-	serverBansCount++;
-	
-	SV_WriteBans();
-
-	Com_Printf("Added %s: %s/%d\n", isexception ? "ban exception" : "ban",
-		   NET_AdrToString(ip), mask);
-}
-
-/*
-==================
-SV_DelBanFromList
-
-Remove a ban or an exception from the list.
-==================
-*/
-
-static void SV_DelBanFromList(qboolean isexception)
-{
-	int index, count = 0, todel, mask;
-	netadr_t ip;
-	char *banstring;
-	
-	// make sure server is running
-	if ( !com_sv_running->integer ) {
-		Com_Printf( "Server is not running.\n" );
-		return;
-	}
-	
-	if(Cmd_Argc() != 2)
-	{
-		Com_Printf ("Usage: %s (ip[/subnet] | num)\n", Cmd_Argv(0));
-		return;
-	}
-
-	banstring = Cmd_Argv(1);
-	
-	if(strchr(banstring, '.') || strchr(banstring, ':'))
-	{
-		serverBan_t *curban;
-		
-		if(SV_ParseCIDRNotation(&ip, &mask, banstring))
-		{
-			Com_Printf("Error: Invalid address %s\n", banstring);
-			return;
-		}
-		
-		index = 0;
-		
-		while(index < serverBansCount)
-		{
-			curban = &serverBans[index];
-			
-			if(curban->isexception == isexception		&&
-			   curban->subnet >= mask 			&&
-			   NET_CompareBaseAdrMask(curban->ip, ip, mask))
-			{
-				Com_Printf("Deleting %s %s/%d\n",
-					   isexception ? "exception" : "ban",
-					   NET_AdrToString(curban->ip), curban->subnet);
-					   
-				SV_DelBanEntryFromList(index);
-			}
-			else
-				index++;
-		}
-	}
-	else
-	{
-		todel = atoi(Cmd_Argv(1));
-
-		if(todel < 1 || todel > serverBansCount)
-		{
-			Com_Printf("Error: Invalid ban number given\n");
-			return;
-		}
-	
-		for(index = 0; index < serverBansCount; index++)
-		{
-			if(serverBans[index].isexception == isexception)
-			{
-				count++;
-			
-				if(count == todel)
-				{
-					Com_Printf("Deleting %s %s/%d\n",
-					   isexception ? "exception" : "ban",
-					   NET_AdrToString(serverBans[index].ip), serverBans[index].subnet);
-
-					SV_DelBanEntryFromList(index);
-
-					break;
-				}
-			}
-		}
-	}
-	
-	SV_WriteBans();
-}
-
-
-/*
-==================
-SV_ListBans_f
-
-List all bans and exceptions on console
-==================
-*/
-
 static void SV_ListBans_f(void)
 {
 	int index, count;
 	serverBan_t *ban;
-
-	// make sure server is running
-	if ( !com_sv_running->integer ) {
-		Com_Printf( "Server is not running.\n" );
-		return;
-	}
 	
 	// List all bans
 	for(index = count = 0; index < serverBansCount; index++)
@@ -1097,28 +821,17 @@ static void SV_ListBans_f(void)
 	}
 }
 
-/*
-==================
-SV_FlushBans_f
-
-Delete all bans and exceptions.
-==================
-*/
-
 static void SV_FlushBans_f(void)
 {
-	// make sure server is running
-	if ( !com_sv_running->integer ) {
-		Com_Printf( "Server is not running.\n" );
-		return;
-	}
-
+	fileHandle_t blankf;
+	
 	serverBansCount = 0;
 	
 	// empty the ban file.
-	SV_WriteBans();
+	blankf = FS_FOpenFileWrite(SERVER_BANFILE);
 	
-	Com_Printf("All bans and exceptions have been deleted.\n");
+	if(blankf)
+		FS_FCloseFile(blankf);
 }
 
 static void SV_BanAddr_f(void)
@@ -1142,22 +855,37 @@ static void SV_ExceptDel_f(void)
 }
 
 /*
-** SV_Strlen -- skips color escape codes
-*/
-static int SV_Strlen( const char *str ) {
-	const char *s = str;
-	int count = 0;
+==================
+SV_KickNum_f
 
-	while ( *s ) {
-		if ( Q_IsColorString( s ) ) {
-			s += 2;
-		} else {
-			count++;
-			s++;
-		}
+Kick a user off of the server  FIXME: move to game
+==================
+*/
+static void SV_KickNum_f( void ) {
+	client_t	*cl;
+
+	// make sure server is running
+	if ( !com_sv_running->integer ) {
+		Com_Printf( "Server is not running.\n" );
+		return;
 	}
 
-	return count;
+	if ( Cmd_Argc() != 2 ) {
+		Com_Printf ("Usage: kicknum <client number>\n");
+		return;
+	}
+
+	cl = SV_GetPlayerByNum();
+	if ( !cl ) {
+		return;
+	}
+	if( cl->netchan.remoteAddress.type == NA_LOOPBACK ) {
+		SV_SendServerCommand(NULL, "print \"%s\"", "Cannot kick host player\n");
+		return;
+	}
+
+	SV_DropClient( cl, "was kicked" );
+	cl->lastPacketTime = svs.time;	// in case there is a funny zombie
 }
 
 /*
@@ -1180,20 +908,20 @@ static void SV_Status_f( void ) {
 
 	Com_Printf ("map: %s\n", sv_mapname->string );
 
-	Com_Printf ("cl score ping name            address                                 rate \n");
-	Com_Printf ("-- ----- ---- --------------- --------------------------------------- -----\n");
+	Com_Printf ("num score ping name            lastmsg address               qport rate\n");
+	Com_Printf ("--- ----- ---- --------------- ------- --------------------- ----- -----\n");
 	for (i=0,cl=svs.clients ; i < sv_maxclients->integer ; i++,cl++)
 	{
 		if (!cl->state)
 			continue;
-		Com_Printf ("%2i ", i);
+		Com_Printf ("%3i ", i);
 		ps = SV_GameClientNum( i );
 		Com_Printf ("%5i ", ps->persistant[PERS_SCORE]);
 
 		if (cl->state == CS_CONNECTED)
-			Com_Printf ("CON ");
+			Com_Printf ("CNCT ");
 		else if (cl->state == CS_ZOMBIE)
-			Com_Printf ("ZMB ");
+			Com_Printf ("ZMBI ");
 		else
 		{
 			ping = cl->ping < 9999 ? cl->ping : 9999;
@@ -1201,29 +929,23 @@ static void SV_Status_f( void ) {
 		}
 
 		Com_Printf ("%s", cl->name);
-		
-		l = 16 - SV_Strlen(cl->name);
-		j = 0;
-		
-		do
-		{
+	// TTimo adding a ^7 to reset the color
+	// NOTE: colored names in status breaks the padding (WONTFIX)
+	Com_Printf ("^7");
+		l = 16 - strlen(cl->name);
+		for (j=0 ; j<l ; j++)
 			Com_Printf (" ");
-			j++;
-		} while(j < l);
 
+		Com_Printf ("%7i ", svs.time - cl->lastPacketTime );
 
-		// TTimo adding a ^7 to reset the color
 		s = NET_AdrToString( cl->netchan.remoteAddress );
-		Com_Printf ("^7%s", s);
-		l = 39 - strlen(s);
-		j = 0;
+		Com_Printf ("%s", s);
+		l = 22 - strlen(s);
+		for (j=0 ; j<l ; j++)
+			Com_Printf (" ");
 		
-		do
-		{
-			Com_Printf(" ");
-			j++;
-		} while(j < l);
-		
+		Com_Printf ("%5i", cl->netchan.qport);
+
 		Com_Printf (" %5i", cl->rate);
 
 		Com_Printf ("\n");
@@ -1263,110 +985,6 @@ static void SV_ConSay_f(void) {
 	SV_SendServerCommand(NULL, "chat \"%s\"", text);
 }
 
-/*
-==================
-SV_ConTell_f
-==================
-*/
-static void SV_ConTell_f(void) {
-	char	*p;
-	char	text[1024];
-	client_t	*cl;
-
-	// make sure server is running
-	if ( !com_sv_running->integer ) {
-		Com_Printf( "Server is not running.\n" );
-		return;
-	}
-
-	if ( Cmd_Argc() < 3 ) {
-		Com_Printf ("Usage: tell <client number> <text>\n");
-		return;
-	}
-
-	cl = SV_GetPlayerByNum();
-	if ( !cl ) {
-		return;
-	}
-
-	strcpy (text, "console_tell: ");
-	p = Cmd_ArgsFrom(2);
-
-	if ( *p == '"' ) {
-		p++;
-		p[strlen(p)-1] = 0;
-	}
-
-	strcat(text, p);
-
-	SV_SendServerCommand(cl, "chat \"%s\"", text);
-}
-
-
-/*
-==================
-SV_ConSayto_f
-==================
-*/
-static void SV_ConSayto_f(void) {
-	char		*p;
-	char		text[1024];
-	client_t	*cl;
-	char		*rawname;
-	char		name[MAX_NAME_LENGTH];
-	char		cleanName[MAX_NAME_LENGTH];
-	client_t	*saytocl;
-	int			i;
-
-	// make sure server is running
-	if ( !com_sv_running->integer ) {
-		Com_Printf( "Server is not running.\n" );
-		return;
-	}
-
-	if ( Cmd_Argc() < 3 ) {
-		Com_Printf ("Usage: sayto <player name> <text>\n");
-		return;
-	}
-
-	rawname = Cmd_Argv(1);
-	
-	//allowing special characters in the console 
-	//with hex strings for player names
-	Com_FieldStringToPlayerName( name, MAX_NAME_LENGTH, rawname );
-
-	saytocl = NULL;
-	for ( i=0, cl=svs.clients ; i < sv_maxclients->integer ; i++,cl++ ) {
-		if ( !cl->state ) {
-			continue;
-		}
-		Q_strncpyz( cleanName, cl->name, sizeof(cleanName) );
-		Q_CleanStr( cleanName );
-
-		if ( !Q_stricmp( cleanName, name ) ) {
-			saytocl = cl;
-			break;
-		}
-	}
-	if( !saytocl )
-	{
-		Com_Printf ("No such player name: %s.\n", name);
-		return;
-	}
-
-	strcpy (text, "console_sayto: ");
-	p = Cmd_ArgsFrom(2);
-
-	if ( *p == '"' ) {
-		p++;
-		p[strlen(p)-1] = 0;
-	}
-
-	strcat(text, p);
-
-	SV_SendServerCommand(saytocl, "chat \"%s\"", text);
-}
-
 
 /*
 ==================
@@ -1388,12 +1006,6 @@ Examine the serverinfo string
 ===========
 */
 static void SV_Serverinfo_f( void ) {
-	// make sure server is running
-	if ( !com_sv_running->integer ) {
-		Com_Printf( "Server is not running.\n" );
-		return;
-	}
-
 	Com_Printf ("Server info settings:\n");
 	Info_Print ( Cvar_InfoString( CVAR_SERVERINFO ) );
 }
@@ -1403,18 +1015,12 @@ static void SV_Serverinfo_f( void ) {
 ===========
 SV_Systeminfo_f
 
-Examine the systeminfo string
+Examine or change the serverinfo string
 ===========
 */
 static void SV_Systeminfo_f( void ) {
-	// make sure server is running
-	if ( !com_sv_running->integer ) {
-		Com_Printf( "Server is not running.\n" );
-		return;
-	}
-
 	Com_Printf ("System info settings:\n");
-	Info_Print ( Cvar_InfoString_Big( CVAR_SYSTEMINFO ) );
+	Info_Print ( Cvar_InfoString( CVAR_SYSTEMINFO ) );
 }
 
 
@@ -1422,7 +1028,7 @@ static void SV_Systeminfo_f( void ) {
 ===========
 SV_DumpUser_f
 
-Examine all a users info strings
+Examine all a users info strings FIXME: move to game
 ===========
 */
 static void SV_DumpUser_f( void ) {
@@ -1435,7 +1041,7 @@ static void SV_DumpUser_f( void ) {
 	}
 
 	if ( Cmd_Argc() != 2 ) {
-		Com_Printf ("Usage: dumpuser <userid>\n");
+		Com_Printf ("Usage: info <userid>\n");
 		return;
 	}
 
@@ -1468,44 +1074,7 @@ SV_CompleteMapName
 */
 static void SV_CompleteMapName( char *args, int argNum ) {
 	if( argNum == 2 ) {
-		Field_CompleteFilename( "maps", "bsp", qtrue, qfalse );
-	}
-}
-
-/*
-==================
-SV_CompletePlayerName
-==================
-*/
-static void SV_CompletePlayerName( char *args, int argNum ) {
-	if( argNum == 2 ) {
-		char		names[MAX_CLIENTS][MAX_NAME_LENGTH];
-		const char	*namesPtr[MAX_CLIENTS];
-		client_t	*cl;
-		int			i;
-		int			nameCount;
-		int			clientCount;
-
-		nameCount = 0;
-		clientCount = sv_maxclients->integer;
-
-		for ( i=0, cl=svs.clients ; i < clientCount; i++,cl++ ) {
-			if ( !cl->state ) {
-				continue;
-			}
-			if( i >= MAX_CLIENTS ) {
-				break;
-			}
-			Q_strncpyz( names[nameCount], cl->name, sizeof(names[nameCount]) );
-			Q_CleanStr( names[nameCount] );
-
-			namesPtr[nameCount] = names[nameCount];
-
-			nameCount++;
-		}
-		qsort( (void*)namesPtr, nameCount, sizeof( namesPtr[0] ), Com_strCompare );
-
-		Field_CompletePlayerName( namesPtr, nameCount );
+		Field_CompleteFilename( "maps", "bsp", qtrue );
 	}
 }
 
@@ -1525,16 +1094,13 @@ void SV_AddOperatorCommands( void ) {
 	Cmd_AddCommand ("heartbeat", SV_Heartbeat_f);
 	Cmd_AddCommand ("kick", SV_Kick_f);
 #ifndef STANDALONE
-	if(!com_standalone->integer)
+	if(!Cvar_VariableIntegerValue("com_standalone"))
 	{
 		Cmd_AddCommand ("banUser", SV_Ban_f);
 		Cmd_AddCommand ("banClient", SV_BanNum_f);
 	}
 #endif
-	Cmd_AddCommand ("kickbots", SV_KickBots_f);
-	Cmd_AddCommand ("kickall", SV_KickAll_f);
-	Cmd_AddCommand ("kicknum", SV_KickNum_f);
-	Cmd_AddCommand ("clientkick", SV_KickNum_f); // Legacy command
+	Cmd_AddCommand ("clientkick", SV_KickNum_f);
 	Cmd_AddCommand ("status", SV_Status_f);
 	Cmd_AddCommand ("serverinfo", SV_Serverinfo_f);
 	Cmd_AddCommand ("systeminfo", SV_Systeminfo_f);
@@ -1554,9 +1120,6 @@ void SV_AddOperatorCommands( void ) {
 	Cmd_AddCommand ("killserver", SV_KillServer_f);
 	if( com_dedicated->integer ) {
 		Cmd_AddCommand ("say", SV_ConSay_f);
-		Cmd_AddCommand ("tell", SV_ConTell_f);
-		Cmd_AddCommand ("sayto", SV_ConSayto_f);
-		Cmd_SetCommandCompletionFunc( "sayto", SV_CompletePlayerName );
 	}
 	
 	Cmd_AddCommand("rehashbans", SV_RehashBans_f);
@@ -1578,10 +1141,6 @@ void SV_RemoveOperatorCommands( void ) {
 	// removing these won't let the server start again
 	Cmd_RemoveCommand ("heartbeat");
 	Cmd_RemoveCommand ("kick");
-	Cmd_RemoveCommand ("kicknum");
-	Cmd_RemoveCommand ("clientkick");
-	Cmd_RemoveCommand ("kickall");
-	Cmd_RemoveCommand ("kickbots");
 	Cmd_RemoveCommand ("banUser");
 	Cmd_RemoveCommand ("banClient");
 	Cmd_RemoveCommand ("status");

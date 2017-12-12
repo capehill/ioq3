@@ -27,6 +27,14 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 botlib_export_t	*botlib_export;
 
+void SV_GameError( const char *string ) {
+	Com_Error( ERR_DROP, "%s", string );
+}
+
+void SV_GamePrint( const char *string ) {
+	Com_Printf( "%s", string );
+}
+
 // these functions must be used instead of pointer arithmetic, because
 // the game allocates gentities with private information after the server shared part
 int	SV_NumForGentity( sharedEntity_t *ent ) {
@@ -177,14 +185,17 @@ qboolean SV_inPVSIgnorePortals( const vec3_t p1, const vec3_t p2)
 {
 	int		leafnum;
 	int		cluster;
+	int		area1, area2;
 	byte	*mask;
 
 	leafnum = CM_PointLeafnum (p1);
 	cluster = CM_LeafCluster (leafnum);
+	area1 = CM_LeafArea (leafnum);
 	mask = CM_ClusterPVS (cluster);
 
 	leafnum = CM_PointLeafnum (p2);
 	cluster = CM_LeafCluster (leafnum);
+	area2 = CM_LeafArea (leafnum);
 
 	if ( mask && (!(mask[cluster>>3] & (1<<(cluster&7)) ) ) )
 		return qfalse;
@@ -211,7 +222,7 @@ void SV_AdjustAreaPortalState( sharedEntity_t *ent, qboolean open ) {
 
 /*
 ==================
-SV_EntityContact
+SV_GameAreaEntities
 ==================
 */
 qboolean	SV_EntityContact( vec3_t mins, vec3_t maxs, const sharedEntity_t *gEnt, int capsule ) {
@@ -306,7 +317,7 @@ intptr_t SV_GameSystemCalls( intptr_t *args ) {
 		Cvar_Update( VMA(1) );
 		return 0;
 	case G_CVAR_SET:
-		Cvar_SetSafe( (const char *)VMA(1), (const char *)VMA(2) );
+		Cvar_Set( (const char *)VMA(1), (const char *)VMA(2) );
 		return 0;
 	case G_CVAR_VARIABLE_INTEGER_VALUE:
 		return Cvar_VariableIntegerValue( (const char *)VMA(1) );
@@ -325,7 +336,7 @@ intptr_t SV_GameSystemCalls( intptr_t *args ) {
 	case G_FS_FOPEN_FILE:
 		return FS_FOpenFileByMode( VMA(1), VMA(2), args[3] );
 	case G_FS_READ:
-		FS_Read( VMA(1), args[2], args[3] );
+		FS_Read2( VMA(1), args[2], args[3] );
 		return 0;
 	case G_FS_WRITE:
 		FS_Write( VMA(1), args[2], args[3] );
@@ -426,7 +437,7 @@ intptr_t SV_GameSystemCalls( intptr_t *args ) {
 	case G_REAL_TIME:
 		return Com_RealTime( VMA(1) );
 	case G_SNAPVECTOR:
-		Q_SnapVector(VMA(1));
+		Sys_SnapVector( VMA(1) );
 		return 0;
 
 		//====================================
@@ -534,7 +545,7 @@ intptr_t SV_GameSystemCalls( intptr_t *args ) {
 
 	case BOTLIB_EA_ACTION:
 		botlib_export->ea.EA_Action( args[1], args[2] );
-		return 0;
+		break;
 	case BOTLIB_EA_GESTURE:
 		botlib_export->ea.EA_Gesture( args[1] );
 		return 0;
@@ -840,7 +851,7 @@ intptr_t SV_GameSystemCalls( intptr_t *args ) {
 	default:
 		Com_Error( ERR_DROP, "Bad game system trap: %ld", (long int) args[0] );
 	}
-	return 0;
+	return -1;
 }
 
 /*
@@ -901,7 +912,7 @@ void SV_RestartGameProgs( void ) {
 	VM_Call( gvm, GAME_SHUTDOWN, qtrue );
 
 	// do a restart instead of a free
-	gvm = VM_Restart(gvm, qtrue);
+	gvm = VM_Restart( gvm );
 	if ( !gvm ) {
 		Com_Error( ERR_FATAL, "VM_Restart on game failed" );
 	}

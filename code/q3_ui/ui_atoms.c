@@ -38,7 +38,7 @@ void QDECL Com_Error( int level, const char *error, ... ) {
 	Q_vsnprintf (text, sizeof(text), error, argptr);
 	va_end (argptr);
 
-	trap_Error( text );
+	trap_Error( va("%s", text) );
 }
 
 void QDECL Com_Printf( const char *msg, ... ) {
@@ -49,7 +49,7 @@ void QDECL Com_Printf( const char *msg, ... ) {
 	Q_vsnprintf (text, sizeof(text), msg, argptr);
 	va_end (argptr);
 
-	trap_Print( text );
+	trap_Print( va("%s", text) );
 }
 
 /*
@@ -879,10 +879,10 @@ void UI_MouseEvent( int dx, int dy )
 
 	// update mouse screen position
 	uis.cursorx += dx;
-	if (uis.cursorx < -uis.bias)
-		uis.cursorx = -uis.bias;
-	else if (uis.cursorx > SCREEN_WIDTH+uis.bias)
-		uis.cursorx = SCREEN_WIDTH+uis.bias;
+	if (uis.cursorx < 0)
+		uis.cursorx = 0;
+	else if (uis.cursorx > SCREEN_WIDTH)
+		uis.cursorx = SCREEN_WIDTH;
 
 	uis.cursory += dy;
 	if (uis.cursory < 0)
@@ -994,9 +994,6 @@ UI_ConsoleCommand
 */
 qboolean UI_ConsoleCommand( int realTime ) {
 	char	*cmd;
-
-	uis.frametime = realTime - uis.realtime;
-	uis.realtime = realTime;
 
 	cmd = UI_Argv( 0 );
 

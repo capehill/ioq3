@@ -21,11 +21,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include <sys/types.h> /* needed by sys/mman.h on OSX */
-#ifdef __amigaos4__
-#include <proto/exec.h>
-#else
 #include <sys/mman.h>
-#endif
 #include <sys/time.h>
 #include <time.h>
 #include <stddef.h>
@@ -49,7 +45,11 @@ static clock_t time_total_vm = 0;
 #endif
 
 /* exit() won't be called but use it because it is marked with noreturn */
-#define DIE( reason ) Com_Error( ERR_DROP, "vm_powerpc compiler error: " reason )
+#define DIE( reason ) \
+	do { \
+		Com_Error(ERR_DROP, "vm_powerpc compiler error: " reason "\n"); \
+		exit(1); \
+	} while(0)
 
 /*
  * vm_powerpc uses large quantities of memory during compilation,
@@ -311,7 +311,7 @@ typedef struct VM_Data {
 
 	// function pointers, no use to waste registers for them
 	long int (* AsmCall)( int, int );
-	void (* BlockCopy )( unsigned int, unsigned int, size_t );
+	void (* BlockCopy )( unsigned int, unsigned int, unsigned int );
 
 	// instruction pointers, rarely used so don't waste register
 	ppc_instruction_t *iPointers;
@@ -367,13 +367,13 @@ VM_AsmCall( int callSyscallInvNum, int callProgramStack )
 
 		ret = currentVM->systemCall( argPosition );
 	} else {
-		intptr_t args[MAX_VMSYSCALL_ARGS];
+		intptr_t args[11];
 
 		// generated code does not invert syscall number
 		args[0] = -1 - callSyscallInvNum;
 
 		int *argPosition = (int *)((byte *)currentVM->dataBase + callProgramStack + 4);
-		for( i = 1; i < ARRAY_LEN(args); i++ )
+		for( i = 1; i < 11; i++ )
 			args[ i ] = argPosition[ i ];
 
 		ret = currentVM->systemCall( args );
@@ -388,6 +388,23 @@ VM_AsmCall( int callSyscallInvNum, int callProgramStack )
 
 	return ret;
 }
+
+static void
+VM_BlockCopy( unsigned int dest, unsigned int src, unsigned int count )
+{
+	unsigned dataMask = currentVM->dataMask;
+
+	if ( (dest & dataMask) != dest
+		|| (src & dataMask) != src
+		|| ((dest+count) & dataMask) != dest + count
+		|| ((src+count) & dataMask) != src + count)
+	{
+		DIE( "OP_BLOCK_COPY out of range!");
+	}
+
+	memcpy( currentVM->dataBase+dest, currentVM->dataBase+src, count );
+}
+
 
 /*
  * code-block descriptors
@@ -673,7 +690,7 @@ static const long int gpr_list[] = {
 	r7, r8, r9, r10,
 };
 static const long int gpr_vstart = 8; /* position of first volatile register */
-static const long int gpr_total = ARRAY_LEN( gpr_list );
+static const long int gpr_total = sizeof( gpr_list ) / sizeof( gpr_list[0] );
 
 static const long int fpr_list[] = {
 	/* static registers, normally none is used */
@@ -687,7 +704,7 @@ static const long int fpr_list[] = {
 	f12, f13,
 };
 static const long int fpr_vstart = 8;
-static const long int fpr_total = ARRAY_LEN( fpr_list );
+static const long int fpr_total = sizeof( fpr_list ) / sizeof( fpr_list[0] );
 
 /*
  * prepare some dummy structures and emit init code
@@ -1815,24 +1832,13 @@ PPC_ComputeCode( vm_t *vm )
 		+ sizeof( unsigned int ) * data_acc
 		+ sizeof( ppc_instruction_t ) * codeInstructions;
 
-#ifdef __amigaos4__
-	unsigned char *dataAndCode = IExec->AllocVecTags(codeLength,
-		AVT_Type, MEMF_EXECUTABLE,
-		AVT_ClearWithValue, 0,
-		TAG_DONE);
-
-	if (!dataAndCode) {
-		DIE( "Not enough memory" );
-	}
-#else
 	// get the memory for the generated code, smarter ppcs need the
 	// mem to be marked as executable (whill change later)
 	unsigned char *dataAndCode = mmap( NULL, codeLength,
 		PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0 );
 
-	if (dataAndCode == MAP_FAILED)
+	if ( ! dataAndCode )
 		DIE( "Not enough memory" );
-#endif
 
 	ppc_instruction_t *codeNow, *codeBegin;
 	codeNow = codeBegin = (ppc_instruction_t *)( dataAndCode + VM_Data_Offset( data[ data_acc ] ) );
@@ -1976,19 +1982,16 @@ PPC_ComputeCode( vm_t *vm )
 			di_now = di_first;
 		}
 	}
+
+	return;
 }
 
 static void
 VM_Destroy_Compiled( vm_t *self )
 {
 	if ( self->codeBase ) {
-#ifdef __amigaos4__
-		Com_Printf( "VM_Destroy_Compiled at %p\n", self->codeBase );
-		IExec->FreeVec( self->codeBase );
-#else
 		if ( munmap( self->codeBase, self->codeLength ) )
 			Com_Printf( S_COLOR_RED "Memory unmap failed, possible memory leak\n" );
-#endif
 	}
 	self->codeBase = NULL;
 }
@@ -2079,7 +2082,6 @@ VM_Compile( vm_t *vm, vmHeader_t *header )
 			Com_Printf( S_COLOR_RED "Pointer %ld not initialized !\n", i );
 #endif
 
-#ifndef __amigaos4__
 	/* mark memory as executable and not writeable */
 	if ( mprotect( vm->codeBase, vm->codeLength, PROT_READ|PROT_EXEC ) ) {
 
@@ -2087,7 +2089,6 @@ VM_Compile( vm_t *vm, vmHeader_t *header )
 		VM_Destroy_Compiled( vm );
 		DIE( "mprotect failed" );
 	}
-#endif
 
 	vm->destroy = VM_Destroy_Compiled;
 	vm->compiled = qtrue;
@@ -2121,9 +2122,9 @@ VM_CallCompiled( vm_t *vm, int *args )
 
 	vm->currentlyInterpreting = qtrue;
 
-	programStack -= ( 8 + 4 * MAX_VMMAIN_ARGS );
+	programStack -= 48;
 	argPointer = (int *)&image[ programStack + 8 ];
-	memcpy( argPointer, args, 4 * MAX_VMMAIN_ARGS );
+	memcpy( argPointer, args, 4 * 9 );
 	argPointer[ -1 ] = 0;
 	argPointer[ -2 ] = -1;
 

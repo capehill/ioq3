@@ -56,7 +56,6 @@ typedef struct sfx_s {
 	qboolean		soundCompressed;		// not in Memory
 	int				soundCompressionMethod;	
 	int 			soundLength;
-	int			soundChannels;
 	char 			soundName[MAX_QPATH];
 	int				lastTimeUsed;
 	struct sfx_s	*next;
@@ -74,8 +73,6 @@ typedef struct {
 #define START_SAMPLE_IMMEDIATE	0x7fffffff
 
 #define MAX_DOPPLER_SCALE 50.0f //arbitrary
-
-#define THIRD_PERSON_THRESHOLD_SQ (48.0f*48.0f)
 
 typedef struct loopSound_s {
 	vec3_t		origin;
@@ -105,7 +102,6 @@ typedef struct
 	qboolean	fixed_origin;	// use origin instead of fetching entnum's origin
 	sfx_t		*thesfx;		// sfx structure
 	qboolean	doppler;
-	qboolean	fullVolume;
 } channel_t;
 
 
@@ -129,7 +125,7 @@ typedef struct
 	void (*StartLocalSound)( sfxHandle_t sfx, int channelNum );
 	void (*StartBackgroundTrack)( const char *intro, const char *loop );
 	void (*StopBackgroundTrack)( void );
-	void (*RawSamples)(int stream, int samples, int rate, int width, int channels, const byte *data, float volume, int entityNum);
+	void (*RawSamples)(int stream, int samples, int rate, int width, int channels, const byte *data, float volume);
 	void (*StopAllSounds)( void );
 	void (*ClearLoopingSounds)( qboolean killall );
 	void (*AddLoopingSound)( int entityNum, const vec3_t origin, const vec3_t velocity, sfxHandle_t sfx );
@@ -190,13 +186,12 @@ extern	vec3_t	listener_up;
 extern	dma_t	dma;
 
 #define	MAX_RAW_SAMPLES	16384
-#define MAX_RAW_STREAMS (MAX_CLIENTS * 2 + 1)
+#define MAX_RAW_STREAMS 128
 extern	portable_samplepair_t s_rawsamples[MAX_RAW_STREAMS][MAX_RAW_SAMPLES];
 extern	int		s_rawend[MAX_RAW_STREAMS];
 
 extern cvar_t *s_volume;
 extern cvar_t *s_musicVolume;
-extern cvar_t *s_muted;
 extern cvar_t *s_doppler;
 
 extern cvar_t *s_testsound;
@@ -206,7 +201,6 @@ qboolean S_LoadSound( sfx_t *sfx );
 void		SND_free(sndBuffer *v);
 sndBuffer*	SND_malloc( void );
 void		SND_setup( void );
-void		SND_shutdown(void);
 
 void S_PaintChannels(int endtime);
 

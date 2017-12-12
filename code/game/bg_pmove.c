@@ -34,6 +34,7 @@ pml_t		pml;
 float	pm_stopspeed = 100.0f;
 float	pm_duckScale = 0.25f;
 float	pm_swimScale = 0.50f;
+float	pm_wadeScale = 0.70f;
 
 float	pm_accelerate = 10.0f;
 float	pm_airaccelerate = 1.0f;
@@ -314,7 +315,7 @@ static float PM_CmdScale( usercmd_t *cmd ) {
 ================
 PM_SetMovementDir
 
-Determine the rotation of the legs relative
+Determine the rotation of the legs reletive
 to the facing dir
 ================
 */
@@ -424,7 +425,7 @@ static qboolean	PM_CheckWaterJump( void ) {
 
 	spot[2] += 16;
 	cont = pm->pointcontents (spot, pm->ps->clientNum );
-	if ( cont & (CONTENTS_SOLID|CONTENTS_PLAYERCLIP|CONTENTS_BODY) ) {
+	if ( cont ) {
 		return qfalse;
 	}
 
@@ -483,9 +484,9 @@ static void PM_WaterMove( void ) {
 	// jump = head for surface
 	if ( pm->cmd.upmove >= 10 ) {
 		if (pm->ps->velocity[2] > -300) {
-			if ( pm->watertype & CONTENTS_WATER ) {
+			if ( pm->watertype == CONTENTS_WATER ) {
 				pm->ps->velocity[2] = 100;
-			} else if ( pm->watertype & CONTENTS_SLIME ) {
+			} else if (pm->watertype == CONTENTS_SLIME) {
 				pm->ps->velocity[2] = 80;
 			} else {
 				pm->ps->velocity[2] = 50;
@@ -1790,7 +1791,7 @@ static void PM_DropTimers( void ) {
 PM_UpdateViewAngles
 
 This can be used as another entry point when only the viewangles
-are being updated instead of a full move
+are being updated isntead of a full move
 ================
 */
 void PM_UpdateViewAngles( playerState_t *ps, const usercmd_t *cmd ) {
@@ -1862,7 +1863,7 @@ void PmoveSingle (pmove_t *pmove) {
 	}
 
 	// set the firing flag for continuous beam weapons
-	if ( !(pm->ps->pm_flags & PMF_RESPAWNED) && pm->ps->pm_type != PM_INTERMISSION && pm->ps->pm_type != PM_NOCLIP
+	if ( !(pm->ps->pm_flags & PMF_RESPAWNED) && pm->ps->pm_type != PM_INTERMISSION
 		&& ( pm->cmd.buttons & BUTTON_ATTACK ) && pm->ps->ammo[ pm->ps->weapon ] ) {
 		pm->ps->eFlags |= EF_FIRING;
 	} else {

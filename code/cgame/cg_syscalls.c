@@ -31,7 +31,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 static intptr_t (QDECL *syscall)( intptr_t arg, ... ) = (intptr_t (QDECL *)( intptr_t, ...))-1;
 
 
-Q_EXPORT void dllEntry( intptr_t (QDECL  *syscallptr)( intptr_t arg,... ) ) {
+void dllEntry( intptr_t (QDECL  *syscallptr)( intptr_t arg,... ) ) {
 	syscall = syscallptr;
 }
 
@@ -46,11 +46,8 @@ void	trap_Print( const char *fmt ) {
 	syscall( CG_PRINT, fmt );
 }
 
-void trap_Error(const char *fmt)
-{
-	syscall(CG_ERROR, fmt);
-	// shut up GCC warning about returning functions, because we know better
-	exit(1);
+void	trap_Error( const char *fmt ) {
+	syscall( CG_ERROR, fmt );
 }
 
 int		trap_Milliseconds( void ) {

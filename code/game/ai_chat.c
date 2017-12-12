@@ -381,7 +381,6 @@ int BotValidChatPosition(bot_state_t *bs) {
 	if (BotIsDead(bs)) return qtrue;
 	//never start chatting with a powerup
 	if (bs->inventory[INVENTORY_QUAD] ||
-		bs->inventory[INVENTORY_ENVIRONMENTSUIT] ||
 		bs->inventory[INVENTORY_HASTE] ||
 		bs->inventory[INVENTORY_INVISIBILITY] ||
 		bs->inventory[INVENTORY_REGEN] ||
@@ -488,9 +487,7 @@ int BotChat_StartLevel(bot_state_t *bs) {
 	if (bs->lastchat_time > FloatTime() - TIME_BETWEENCHATTING) return qfalse;
 	//don't chat in teamplay
 	if (TeamPlayIsOn()) {
-#ifdef MISSIONPACK
 	    trap_EA_Command(bs->client, "vtaunt");
-#endif
 	    return qfalse;
 	}
 	// don't chat in tournament mode
@@ -523,11 +520,9 @@ int BotChat_EndLevel(bot_state_t *bs) {
 	// teamplay
 	if (TeamPlayIsOn()) 
 	{
-#ifdef MISSIONPACK
 		if (BotIsFirstInRankings(bs)) {
 			trap_EA_Command(bs->client, "vtaunt");
 		}
-#endif
 		return qtrue;
 	}
 	// don't chat in tournament mode
@@ -604,9 +599,7 @@ int BotChat_Death(bot_state_t *bs) {
 	{
 		//teamplay
 		if (TeamPlayIsOn()) {
-#ifdef MISSIONPACK
 			trap_EA_Command(bs->client, "vtaunt");
-#endif
 			return qtrue;
 		}
 		//
@@ -708,9 +701,7 @@ int BotChat_Kill(bot_state_t *bs) {
 	{
 		//don't chat in teamplay
 		if (TeamPlayIsOn()) {
-#ifdef MISSIONPACK
 			trap_EA_Command(bs->client, "vtaunt");
-#endif
 			return qfalse;			// don't wait
 		}
 		//
@@ -752,7 +743,7 @@ int BotChat_EnemySuicide(bot_state_t *bs) {
 	if (bs->lastchat_time > FloatTime() - TIME_BETWEENCHATTING) return qfalse;
 	if (BotNumActivePlayers() <= 1) return qfalse;
 	//
-	rnd = trap_Characteristic_BFloat(bs->character, CHARACTERISTIC_CHAT_ENEMYSUICIDE, 0, 1);
+	rnd = trap_Characteristic_BFloat(bs->character, CHARACTERISTIC_CHAT_KILL, 0, 1);
 	//don't chat in teamplay
 	if (TeamPlayIsOn()) return qfalse;
 	// don't chat in tournament mode
@@ -804,7 +795,7 @@ int BotChat_HitTalking(bot_state_t *bs) {
 	if (!BotValidChatPosition(bs)) return qfalse;
 	//
 	ClientName(g_entities[bs->client].client->lasthurt_client, name, sizeof(name));
-	weap = BotWeaponNameForMeansOfDeath(g_entities[bs->client].client->lasthurt_mod);
+	weap = BotWeaponNameForMeansOfDeath(g_entities[bs->client].client->lasthurt_client);
 	//
 	BotAI_BotInitialChat(bs, "hit_talking", name, weap, NULL);
 	bs->lastchat_time = FloatTime();
@@ -933,9 +924,7 @@ int BotChat_Random(bot_state_t *bs) {
 		EasyClientName(bs->lastkilledplayer, name, sizeof(name));
 	}
 	if (TeamPlayIsOn()) {
-#ifdef MISSIONPACK
 		trap_EA_Command(bs->client, "vtaunt");
-#endif
 		return qfalse;			// don't wait
 	}
 	//
@@ -970,9 +959,9 @@ BotChatTime
 ==================
 */
 float BotChatTime(bot_state_t *bs) {
-	//int cpm;
+	int cpm;
 
-	//cpm = trap_Characteristic_BInteger(bs->character, CHARACTERISTIC_CHAT_CPM, 1, 4000);
+	cpm = trap_Characteristic_BInteger(bs->character, CHARACTERISTIC_CHAT_CPM, 1, 4000);
 
 	return 2.0;	//(float) trap_BotChatLength(bs->cs) * 30 / cpm;
 }

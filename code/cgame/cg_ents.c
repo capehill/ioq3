@@ -139,17 +139,16 @@ static void CG_EntityEffects( centity_t *cent ) {
 
 
 	// constant light glow
-	if(cent->currentState.constantLight)
-	{
+	if ( cent->currentState.constantLight ) {
 		int		cl;
-		float		i, r, g, b;
+		int		i, r, g, b;
 
 		cl = cent->currentState.constantLight;
-		r = (float) (cl & 0xFF) / 255.0;
-		g = (float) ((cl >> 8) & 0xFF) / 255.0;
-		b = (float) ((cl >> 16) & 0xFF) / 255.0;
-		i = (float) ((cl >> 24) & 0xFF) * 4.0;
-		trap_R_AddLightToScene(cent->lerpOrigin, i, r, g, b);
+		r = cl & 255;
+		g = ( cl >> 8 ) & 255;
+		b = ( cl >> 16 ) & 255;
+		i = ( ( cl >> 24 ) & 255 ) * 4;
+		trap_R_AddLightToScene( cent->lerpOrigin, i, r, g, b );
 	}
 
 }
@@ -294,11 +293,6 @@ static void CG_Item( centity_t *cent ) {
 
 		cent->lerpOrigin[2] += 8;	// an extra height boost
 	}
-	
-	if( item->giType == IT_WEAPON && item->giTag == WP_RAILGUN ) {
-		clientInfo_t *ci = &cgs.clientinfo[cg.snap->ps.clientNum];
-		Byte4Copy( ci->c1RGBA, ent.shaderRGBA );
-	}
 
 	ent.hModel = cg_items[es->modelindex].models[0];
 
@@ -349,9 +343,9 @@ static void CG_Item( centity_t *cent ) {
 	// add to refresh list
 	trap_R_AddRefEntityToScene(&ent);
 
-	if ( item->giType == IT_WEAPON && wi && wi->barrelModel ) {
+#ifdef MISSIONPACK
+	if ( item->giType == IT_WEAPON && wi->barrelModel ) {
 		refEntity_t	barrel;
-		vec3_t		angles;
 
 		memset( &barrel, 0, sizeof( barrel ) );
 
@@ -361,17 +355,14 @@ static void CG_Item( centity_t *cent ) {
 		barrel.shadowPlane = ent.shadowPlane;
 		barrel.renderfx = ent.renderfx;
 
-		angles[YAW] = 0;
-		angles[PITCH] = 0;
-		angles[ROLL] = 0;
-		AnglesToAxis( angles, barrel.axis );
-
 		CG_PositionRotatedEntityOnTag( &barrel, &ent, wi->weaponModel, "tag_barrel" );
 
+		AxisCopy( ent.axis, barrel.axis );
 		barrel.nonNormalizedAxes = ent.nonNormalizedAxes;
 
 		trap_R_AddRefEntityToScene( &barrel );
 	}
+#endif
 
 	// accompanying rings / spheres for powerups
 	if ( !cg_simpleItems.integer ) 
@@ -418,7 +409,7 @@ static void CG_Missile( centity_t *cent ) {
 //	int	col;
 
 	s1 = &cent->currentState;
-	if ( s1->weapon >= WP_NUM_WEAPONS ) {
+	if ( s1->weapon > WP_NUM_WEAPONS ) {
 		s1->weapon = 0;
 	}
 	weapon = &cg_weapons[s1->weapon];
@@ -527,7 +518,7 @@ static void CG_Grapple( centity_t *cent ) {
 	const weaponInfo_t		*weapon;
 
 	s1 = &cent->currentState;
-	if ( s1->weapon >= WP_NUM_WEAPONS ) {
+	if ( s1->weapon > WP_NUM_WEAPONS ) {
 		s1->weapon = 0;
 	}
 	weapon = &cg_weapons[s1->weapon];
@@ -671,21 +662,19 @@ CG_AdjustPositionForMover
 Also called by client movement prediction code
 =========================
 */
-void CG_AdjustPositionForMover(const vec3_t in, int moverNum, int fromTime, int toTime, vec3_t out, vec3_t angles_in, vec3_t angles_out) {
+void CG_AdjustPositionForMover( const vec3_t in, int moverNum, int fromTime, int toTime, vec3_t out ) {
 	centity_t	*cent;
 	vec3_t	oldOrigin, origin, deltaOrigin;
 	vec3_t	oldAngles, angles, deltaAngles;
 
 	if ( moverNum <= 0 || moverNum >= ENTITYNUM_MAX_NORMAL ) {
 		VectorCopy( in, out );
-		VectorCopy(angles_in, angles_out);
 		return;
 	}
 
 	cent = &cg_entities[ moverNum ];
 	if ( cent->currentState.eType != ET_MOVER ) {
 		VectorCopy( in, out );
-		VectorCopy(angles_in, angles_out);
 		return;
 	}
 
@@ -699,7 +688,7 @@ void CG_AdjustPositionForMover(const vec3_t in, int moverNum, int fromTime, int 
 	VectorSubtract( angles, oldAngles, deltaAngles );
 
 	VectorAdd( in, deltaOrigin, out );
-	VectorAdd( angles_in, deltaAngles, angles_out );
+
 	// FIXME: origin change when on a rotating object
 }
 
@@ -777,7 +766,7 @@ static void CG_CalcEntityLerpPositions( centity_t *cent ) {
 	// player state
 	if ( cent != &cg.predictedPlayerEntity ) {
 		CG_AdjustPositionForMover( cent->lerpOrigin, cent->currentState.groundEntityNum, 
-		cg.snap->serverTime, cg.time, cent->lerpOrigin, cent->lerpAngles, cent->lerpAngles);
+		cg.snap->serverTime, cg.time, cent->lerpOrigin );
 	}
 }
 
@@ -954,7 +943,7 @@ static void CG_AddCEntity( centity_t *cent ) {
 
 	switch ( cent->currentState.eType ) {
 	default:
-		CG_Error( "Bad entity type: %i", cent->currentState.eType );
+		CG_Error( "Bad entity type: %i\n", cent->currentState.eType );
 		break;
 	case ET_INVISIBLE:
 	case ET_PUSH_TRIGGER:
