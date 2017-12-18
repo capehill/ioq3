@@ -740,14 +740,14 @@ static char socksBuf[4096];
 Sys_SendPacket
 ==================
 */
-void Sys_SendPacket( int length, const void *data, netadr_t to ) {
-	int				ret = SOCKET_ERROR;
+void Sys_SendPacket( int length, const void *data, netadr_t to )
+{
+	int			ret = SOCKET_ERROR;
 	struct sockaddr_storage	addr;
 
 #ifndef AMIGA //__amigaos__
 
-	if( to.type != NA_BROADCAST && to.type != NA_IP &&
-		to.type != NA_IP6 && to.type != NA_MULTICAST6)
+	if( to.type != NA_BROADCAST && to.type != NA_IP && to.type != NA_IP6 && to.type != NA_MULTICAST6)
 	{
 		Com_Error( ERR_FATAL, "Sys_SendPacket: bad address type" );
 		return;
@@ -769,7 +769,7 @@ void Sys_SendPacket( int length, const void *data, netadr_t to ) {
 		return;
 	}
 
-	if( (ip_socket == INVALID_SOCKET && to.type == NA_IP) )
+	if( (ip_socket == INVALID_SOCKET && to.type == NA_IP) || (ip_socket == INVALID_SOCKET && to.type == NA_BROADCAST) ) // Cowcat BROADCAST
 		return;
 
 #endif
@@ -778,8 +778,9 @@ void Sys_SendPacket( int length, const void *data, netadr_t to ) {
 	NetadrToSockadr( &to, (struct sockaddr *) &addr );
 	//Com_Printf("%s", __FUNCTION__);
 
-	if( usingSocks && to.type == NA_IP ) {
-	//Com_Printf("%s 2", __FUNCTION__);
+	if( usingSocks && to.type == NA_IP )
+	{
+		//Com_Printf("%s 2", __FUNCTION__);
 	
 		socksBuf[0] = 0;	// reserved
 		socksBuf[1] = 0;
@@ -790,32 +791,40 @@ void Sys_SendPacket( int length, const void *data, netadr_t to ) {
 		memcpy( &socksBuf[10], data, length );
 		ret = sendto( ip_socket, socksBuf, length+10, 0, &socksRelayAddr, sizeof(socksRelayAddr) );
 	}
-	else {
-	//Com_Printf("%s 3", __FUNCTION__);
-#ifndef AMIGA //__amigaos__ // AmigaOS 4 uses IP4
+
+	else
+	{
+		//Com_Printf("%s 3", __FUNCTION__);
+
+	#ifndef AMIGA //__amigaos__ // AmigaOS 4 uses IP4
 		if(addr.ss_family == AF_INET)
-#endif
-		
+	#endif
 			ret = sendto( ip_socket, data, length, 0, (struct sockaddr *) &addr, sizeof(struct sockaddr_in) );
-#ifndef AMIGA //__amigaos__
+
+	#ifndef AMIGA //__amigaos__
 		else if(addr.ss_family == AF_INET6)
 			ret = sendto( ip6_socket, data, length, 0, (struct sockaddr *) &addr, sizeof(struct sockaddr_in6) );
-#endif
+	#endif
+
 	}
-	if( ret == SOCKET_ERROR ) {
+
+	if( ret == SOCKET_ERROR )
+	{
 		int err = socketError;
 
 		// wouldblock is silent
-		if( err == EAGAIN ) {
+		if( err == EAGAIN )
+		{
 			return;
 		}
 
 		// some PPP links do not allow broadcasts and return an error
-		if( ( err == EADDRNOTAVAIL ) && ( ( to.type == NA_BROADCAST ) ) ) {
+		if( ( err == EADDRNOTAVAIL ) && ( ( to.type == NA_BROADCAST ) ) )
+		{
 			return;
 		}
 
-		Com_Printf( "NET_SendPacket: %s\n", NET_ErrorString() );
+		Com_Printf( "Sys_SendPacket: %s\n", NET_ErrorString() ); // Cowcat
 	}
 }
 

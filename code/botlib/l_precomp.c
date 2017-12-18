@@ -549,7 +549,7 @@ void PC_PrintDefineHashTable(define_t **definehash)
 
 int PC_NameHash(char *name)
 {
-	int register hash, i;
+	int hash, i; // avoid register - Cowcat
 
 	hash = 0;
 	for (i = 0; name[i] != '\0'; i++)

@@ -301,9 +301,10 @@ static void DrawTris (shaderCommands_t *input)
 	GL_Bind( tr.whiteImage );
 	qglColor3f (1,1,1);
 
-	GL_State( GLS_POLYMODE_LINE | GLS_DEPTHMASK_TRUE );
+	GL_State( /* GLS_POLYMODE_LINE |  */ GLS_DEPTHMASK_TRUE ); // Cowcat
 	qglDepthRange( 0, 0 );
 
+	#if 0 // Cowcat
 	qglDisableClientState (GL_COLOR_ARRAY);
 	qglDisableClientState (GL_TEXTURE_COORD_ARRAY);
 
@@ -314,14 +315,17 @@ static void DrawTris (shaderCommands_t *input)
 		qglLockArraysEXT(0, input->numVertexes);
 		GLimp_LogComment( "glLockArraysEXT\n" );
 	}
+	#endif
 
 	R_DrawElements( input->numIndexes, input->indexes );
 
+	#if 0 // Cowcat
 	if (qglUnlockArraysEXT)
 	{
 		qglUnlockArraysEXT();
 		GLimp_LogComment( "glUnlockArraysEXT\n" );
 	}
+	#endif
 
 	qglDepthRange( 0, 1 );
 }
@@ -342,7 +346,8 @@ static void DrawNormals (shaderCommands_t *input)
 	GL_Bind( tr.whiteImage );
 	qglColor3f (1,1,1);
 	qglDepthRange( 0, 0 );	// never occluded
-	GL_State( GLS_POLYMODE_LINE | GLS_DEPTHMASK_TRUE );
+
+	GL_State( /*GLS_POLYMODE_LINE | */ GLS_DEPTHMASK_TRUE ); // Cowcat
 
 	qglBegin (GL_LINES);
 
@@ -408,12 +413,14 @@ static void DrawMultitextured( shaderCommands_t *input, int stage )
 
 	GL_State( pStage->stateBits );
 
+	#if 0 // Cowcat
 	// this is an ugly hack to work around a GeForce driver
 	// bug with multitexture and clip planes
 	if ( backEnd.viewParms.isPortal )
 	{
 		qglPolygonMode( GL_FRONT_AND_BACK, GL_FILL );
 	}
+	#endif
 
 	//
 	// base
@@ -1307,6 +1314,9 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input )
 			//
 			// set state
 			//
+
+			#if 0 // never qtrue - Cowcat
+
 			if ( pStage->bundle[0].vertexLightmap && ( (r_vertexLight->integer && !r_uiFullScreen->integer) || 
 				glConfig.hardwareType == GLHW_PERMEDIA2 ) && r_lightmap->integer )
 			{
@@ -1315,6 +1325,12 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input )
 
 			else 
 				R_BindAnimatedImage( &pStage->bundle[0] );
+
+			#else
+
+			R_BindAnimatedImage( &pStage->bundle[0] );
+
+			#endif
 
 			GL_State( pStage->stateBits );
 
@@ -1327,7 +1343,8 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input )
 		}
 
 		// allow skipping out to show just lightmaps during development
-		if ( r_lightmap->integer && ( pStage->bundle[0].isLightmap || pStage->bundle[1].isLightmap || pStage->bundle[0].vertexLightmap ) )
+		//if ( r_lightmap->integer && ( pStage->bundle[0].isLightmap || pStage->bundle[1].isLightmap || pStage->bundle[0].vertexLightmap ) )
+		if ( r_lightmap->integer && ( pStage->bundle[0].isLightmap || pStage->bundle[1].isLightmap ) ) // fix - Cowcat
 		{
 			break;
 		}
@@ -1340,9 +1357,11 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input )
 */
 void RB_StageIteratorGeneric( void )
 {
-	shaderCommands_t *input;
+	shaderCommands_t 	*input;
+	shader_t		*shader; // Cowcat
 
 	input = &tess;
+	shader = input->shader; // Cowcat
 
 	RB_DeformTessGeometry();
 
@@ -1359,7 +1378,7 @@ void RB_StageIteratorGeneric( void )
 	//
 	// set face culling appropriately
 	//
-	GL_Cull( input->shader->cullType );
+	GL_Cull( shader->cullType ); // was input->shader->cullType - Cowcat
 
 	// set polygon offset if necessary
 	if ( input->shader->polygonOffset )
@@ -1475,7 +1494,6 @@ void RB_StageIteratorVertexLitTexture( void )
 	shader_t		*shader;
 
 	input = &tess;
-
 	shader = input->shader;
 
 	//
@@ -1496,7 +1514,7 @@ void RB_StageIteratorVertexLitTexture( void )
 	//
 	// set face culling appropriately
 	//
-	GL_Cull( input->shader->cullType );
+	GL_Cull( shader->cullType ); // was input->shader->cullType - Cowcat
 
 	//
 	// set arrays and lock
@@ -1557,9 +1575,11 @@ void RB_StageIteratorVertexLitTexture( void )
 
 void RB_StageIteratorLightmappedMultitexture( void )
 {
-	shaderCommands_t *input;
+	shaderCommands_t	*input;
+	shader_t		*shader; // Cowcat
 
 	input = &tess;
+	shader = input->shader; // Cowcat
 
 	//
 	// log this call
@@ -1574,7 +1594,7 @@ void RB_StageIteratorLightmappedMultitexture( void )
 	//
 	// set face culling appropriately
 	//
-	GL_Cull( input->shader->cullType );
+	GL_Cull( shader->cullType ); // was input->shader->cullType  - Cowcat
 
 	//
 	// set color, pointers, and lock

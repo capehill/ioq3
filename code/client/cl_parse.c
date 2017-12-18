@@ -25,7 +25,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 char *svc_strings[256] = {
 	"svc_bad",
-
 	"svc_nop",
 	"svc_gamestate",
 	"svc_configstring",
@@ -38,8 +37,10 @@ char *svc_strings[256] = {
 	"svc_voip",
 };
 
-void SHOWNET( msg_t *msg, char *s) {
-	if ( cl_shownet->integer >= 2) {
+void SHOWNET( msg_t *msg, char *s)
+{
+	if ( cl_shownet->integer >= 2)
+	{
 		Com_Printf ("%3i:%s\n", msg->readcount-1, s);
 	}
 }
@@ -61,23 +62,29 @@ Parses deltas from the given base and adds the resulting entity
 to the current frame
 ==================
 */
-void CL_DeltaEntity (msg_t *msg, clSnapshot_t *frame, int newnum, entityState_t *old, 
-					 qboolean unchanged) {
+void CL_DeltaEntity (msg_t *msg, clSnapshot_t *frame, int newnum, entityState_t *old, qboolean unchanged)
+{
 	entityState_t	*state;
 
 	// save the parsed entity state into the big circular buffer so
 	// it can be used as the source for a later delta
 	state = &cl.parseEntities[cl.parseEntitiesNum & (MAX_PARSE_ENTITIES-1)];
 
-	if ( unchanged ) {
+	if ( unchanged )
+	{
 		*state = *old;
-	} else {
+	}
+
+	else
+	{
 		MSG_ReadDeltaEntity( msg, old, state, newnum );
 	}
 
-	if ( state->number == (MAX_GENTITIES-1) ) {
+	if ( state->number == (MAX_GENTITIES-1) )
+	{
 		return;		// entity was delta removed
 	}
+
 	cl.parseEntitiesNum++;
 	frame->numEntities++;
 }
@@ -88,10 +95,11 @@ CL_ParsePacketEntities
 
 ==================
 */
-void CL_ParsePacketEntities( msg_t *msg, clSnapshot_t *oldframe, clSnapshot_t *newframe) {
-	int			newnum;
+void CL_ParsePacketEntities( msg_t *msg, clSnapshot_t *oldframe, clSnapshot_t *newframe)
+{
+	int		newnum;
 	entityState_t	*oldstate;
-	int			oldindex, oldnum;
+	int		oldindex, oldnum;
 
 	newframe->parseEntitiesNum = cl.parseEntitiesNum;
 	newframe->numEntities = 0;
@@ -99,71 +107,98 @@ void CL_ParsePacketEntities( msg_t *msg, clSnapshot_t *oldframe, clSnapshot_t *n
 	// delta from the entities present in oldframe
 	oldindex = 0;
 	oldstate = NULL;
-	if (!oldframe) {
+
+	if (!oldframe)
+	{
 		oldnum = 99999;
-	} else {
-		if ( oldindex >= oldframe->numEntities ) {
+	}
+
+	else
+	{
+		if ( oldindex >= oldframe->numEntities )
+		{
 			oldnum = 99999;
-		} else {
-			oldstate = &cl.parseEntities[
-				(oldframe->parseEntitiesNum + oldindex) & (MAX_PARSE_ENTITIES-1)];
+		}
+
+		else
+		{
+			oldstate = &cl.parseEntities[(oldframe->parseEntitiesNum + oldindex) & (MAX_PARSE_ENTITIES-1)];
 			oldnum = oldstate->number;
 		}
 	}
 
-	while ( 1 ) {
+	while ( 1 )
+	{
 		// read the entity index number
 		newnum = MSG_ReadBits( msg, GENTITYNUM_BITS );
 
-		if ( newnum == (MAX_GENTITIES-1) ) {
+		if ( newnum == (MAX_GENTITIES-1) )
+		{
 			break;
 		}
 
-		if ( msg->readcount > msg->cursize ) {
+		if ( msg->readcount > msg->cursize )
+		{
 			Com_Error (ERR_DROP,"CL_ParsePacketEntities: end of message");
 		}
 
-		while ( oldnum < newnum ) {
+		while ( oldnum < newnum )
+		{
 			// one or more entities from the old packet are unchanged
-			if ( cl_shownet->integer == 3 ) {
+			if ( cl_shownet->integer == 3 )
+			{
 				Com_Printf ("%3i:  unchanged: %i\n", msg->readcount, oldnum);
 			}
+
 			CL_DeltaEntity( msg, newframe, oldnum, oldstate, qtrue );
 			
 			oldindex++;
 
-			if ( oldindex >= oldframe->numEntities ) {
+			if ( oldindex >= oldframe->numEntities )
+			{
 				oldnum = 99999;
-			} else {
-				oldstate = &cl.parseEntities[
-					(oldframe->parseEntitiesNum + oldindex) & (MAX_PARSE_ENTITIES-1)];
+			}
+
+			else
+			{
+				oldstate = &cl.parseEntities[(oldframe->parseEntitiesNum + oldindex) & (MAX_PARSE_ENTITIES-1)];
 				oldnum = oldstate->number;
 			}
 		}
-		if (oldnum == newnum) {
+
+		if (oldnum == newnum)
+		{
 			// delta from previous state
-			if ( cl_shownet->integer == 3 ) {
+			if ( cl_shownet->integer == 3 )
+			{
 				Com_Printf ("%3i:  delta: %i\n", msg->readcount, newnum);
 			}
+
 			CL_DeltaEntity( msg, newframe, newnum, oldstate, qfalse );
 
 			oldindex++;
 
-			if ( oldindex >= oldframe->numEntities ) {
+			if ( oldindex >= oldframe->numEntities )
+			{
 				oldnum = 99999;
-			} else {
-				oldstate = &cl.parseEntities[
-					(oldframe->parseEntitiesNum + oldindex) & (MAX_PARSE_ENTITIES-1)];
+			}
+
+			else
+			{
+				oldstate = &cl.parseEntities[(oldframe->parseEntitiesNum + oldindex) & (MAX_PARSE_ENTITIES-1)];
 				oldnum = oldstate->number;
 			}
 			continue;
 		}
 
-		if ( oldnum > newnum ) {
+		if ( oldnum > newnum )
+		{
 			// delta from baseline
-			if ( cl_shownet->integer == 3 ) {
+			if ( cl_shownet->integer == 3 )
+			{
 				Com_Printf ("%3i:  baseline: %i\n", msg->readcount, newnum);
 			}
+
 			CL_DeltaEntity( msg, newframe, newnum, &cl.entityBaselines[newnum], qfalse );
 			continue;
 		}
@@ -171,20 +206,26 @@ void CL_ParsePacketEntities( msg_t *msg, clSnapshot_t *oldframe, clSnapshot_t *n
 	}
 
 	// any remaining entities in the old frame are copied over
-	while ( oldnum != 99999 ) {
+	while ( oldnum != 99999 )
+	{
 		// one or more entities from the old packet are unchanged
-		if ( cl_shownet->integer == 3 ) {
+		if ( cl_shownet->integer == 3 )
+		{
 			Com_Printf ("%3i:  unchanged: %i\n", msg->readcount, oldnum);
 		}
+
 		CL_DeltaEntity( msg, newframe, oldnum, oldstate, qtrue );
 		
 		oldindex++;
 
-		if ( oldindex >= oldframe->numEntities ) {
+		if ( oldindex >= oldframe->numEntities )
+		{
 			oldnum = 99999;
-		} else {
-			oldstate = &cl.parseEntities[
-				(oldframe->parseEntitiesNum + oldindex) & (MAX_PARSE_ENTITIES-1)];
+		}
+
+		else
+		{
+			oldstate = &cl.parseEntities[(oldframe->parseEntitiesNum + oldindex) & (MAX_PARSE_ENTITIES-1)];
 			oldnum = oldstate->number;
 		}
 	}
@@ -200,13 +241,14 @@ cl.snap and saved in cl.snapshots[].  If the snapshot is invalid
 for any reason, no changes to the state will be made at all.
 ================
 */
-void CL_ParseSnapshot( msg_t *msg ) {
-	int			len;
+void CL_ParseSnapshot( msg_t *msg )
+{
+	int		len;
 	clSnapshot_t	*old;
 	clSnapshot_t	newSnap;
-	int			deltaNum;
-	int			oldMessageNum;
-	int			i, packetNum;
+	int		deltaNum;
+	int		oldMessageNum;
+	int		i, packetNum;
 
 	// get the reliable sequence acknowledge number
 	// NOTE: now sent with all server to client messages
@@ -229,33 +271,54 @@ void CL_ParseSnapshot( msg_t *msg ) {
 	newSnap.messageNum = clc.serverMessageSequence;
 
 	deltaNum = MSG_ReadByte( msg );
-	if ( !deltaNum ) {
+
+	if ( !deltaNum )
+	{
 		newSnap.deltaNum = -1;
-	} else {
+	}
+
+	else
+	{
 		newSnap.deltaNum = newSnap.messageNum - deltaNum;
 	}
+
 	newSnap.snapFlags = MSG_ReadByte( msg );
 
 	// If the frame is delta compressed from data that we
 	// no longer have available, we must suck up the rest of
 	// the frame, but not use it, then ask for a non-compressed
 	// message 
-	if ( newSnap.deltaNum <= 0 ) {
+	if ( newSnap.deltaNum <= 0 )
+	{
 		newSnap.valid = qtrue;		// uncompressed frame
 		old = NULL;
 		clc.demowaiting = qfalse;	// we can start recording now
-	} else {
+	}
+
+	else
+	{
 		old = &cl.snapshots[newSnap.deltaNum & PACKET_MASK];
-		if ( !old->valid ) {
+
+		if ( !old->valid )
+		{
 			// should never happen
 			Com_Printf ("Delta from invalid frame (not supposed to happen!).\n");
-		} else if ( old->messageNum != newSnap.deltaNum ) {
+		}
+
+		else if ( old->messageNum != newSnap.deltaNum )
+		{
 			// The frame that the server did the delta from
 			// is too old, so we can't reconstruct it properly.
 			Com_Printf ("Delta frame too old.\n");
-		} else if ( cl.parseEntitiesNum - old->parseEntitiesNum > MAX_PARSE_ENTITIES-128 ) {
+		}
+
+		else if ( cl.parseEntitiesNum - old->parseEntitiesNum > MAX_PARSE_ENTITIES - 128 ) // needs to be "- MAX_SNAPSHOT_ENTITIES" - Cowcat
+		{
 			Com_Printf ("Delta parseEntitiesNum too old.\n");
-		} else {
+		}
+
+		else
+		{
 			newSnap.valid = qtrue;	// valid delta parse
 		}
 	}
@@ -273,9 +336,14 @@ void CL_ParseSnapshot( msg_t *msg ) {
 
 	// read playerinfo
 	SHOWNET( msg, "playerstate" );
-	if ( old ) {
+
+	if ( old )
+	{
 		MSG_ReadDeltaPlayerstate( msg, &old->ps, &newSnap.ps );
-	} else {
+	}
+
+	else
+	{
 		MSG_ReadDeltaPlayerstate( msg, NULL, &newSnap.ps );
 	}
 
@@ -285,7 +353,8 @@ void CL_ParseSnapshot( msg_t *msg ) {
 
 	// if not valid, dump the entire thing now that it has
 	// been properly read
-	if ( !newSnap.valid ) {
+	if ( !newSnap.valid )
+	{
 		return;
 	}
 
@@ -295,10 +364,13 @@ void CL_ParseSnapshot( msg_t *msg ) {
 	// time we wrap around in the buffer
 	oldMessageNum = cl.snap.messageNum + 1;
 
-	if ( newSnap.messageNum - oldMessageNum >= PACKET_BACKUP ) {
+	if ( newSnap.messageNum - oldMessageNum >= PACKET_BACKUP )
+	{
 		oldMessageNum = newSnap.messageNum - ( PACKET_BACKUP - 1 );
 	}
-	for ( ; oldMessageNum < newSnap.messageNum ; oldMessageNum++ ) {
+
+	for ( ; oldMessageNum < newSnap.messageNum ; oldMessageNum++ )
+	{
 		cl.snapshots[oldMessageNum & PACKET_MASK].valid = qfalse;
 	}
 
@@ -306,17 +378,22 @@ void CL_ParseSnapshot( msg_t *msg ) {
 	cl.snap = newSnap;
 	cl.snap.ping = 999;
 	// calculate ping time
-	for ( i = 0 ; i < PACKET_BACKUP ; i++ ) {
+	for ( i = 0 ; i < PACKET_BACKUP ; i++ )
+	{
 		packetNum = ( clc.netchan.outgoingSequence - 1 - i ) & PACKET_MASK;
-		if ( cl.snap.ps.commandTime >= cl.outPackets[ packetNum ].p_serverTime ) {
+
+		if ( cl.snap.ps.commandTime >= cl.outPackets[ packetNum ].p_serverTime )
+		{
 			cl.snap.ping = cls.realtime - cl.outPackets[ packetNum ].p_realtime;
 			break;
 		}
 	}
+
 	// save the frame off in the backup array for later delta comparisons
 	cl.snapshots[cl.snap.messageNum & PACKET_MASK] = cl.snap;
 
-	if (cl_shownet->integer == 3) {
+	if (cl_shownet->integer == 3)
+	{
 		Com_Printf( "   snapshot:%i  delta:%i  ping:%i\n", cl.snap.messageNum,
 		cl.snap.deltaNum, cl.snap.ping );
 	}

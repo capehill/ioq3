@@ -71,7 +71,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #endif
 
-static struct Device *TimerBase = NULL;
+//static struct Device *TimerBase = NULL;
 
 // Used to determine CD Path
 static char cdPath[MAX_OSPATH];
@@ -102,6 +102,8 @@ struct timeval {
 #define tv_usec tv_micro
 
 #endif
+
+#if 0
 
 int Sys_Milliseconds(void)
 {
@@ -140,6 +142,46 @@ int Sys_Milliseconds(void)
 	
 	return curtime.tv_sec * 1000 + curtime.tv_usec/1000;
 }
+
+#else
+
+static unsigned int inittime = 0L;
+
+#if defined(AMIGA) && !defined(__PPC__)
+extern struct Library *TimerBase;
+#endif
+
+int Sys_Milliseconds(void)
+{
+	struct timeval 	tv;
+  	unsigned int 	currenttime;
+	static qboolean initialized = qfalse;
+	
+  	#ifdef __PPC__
+
+  	GetSysTimePPC(&tv);
+
+	#else
+
+ 	GetSysTime(&tv);
+
+	#endif
+
+  	currenttime = tv.tv_sec;
+
+	if (!initialized)
+	{
+		inittime = currenttime;
+
+		initialized = qtrue;
+	}
+
+  	currenttime = currenttime-inittime;
+
+  	return currenttime * 1000 + tv.tv_usec / 1000;
+}
+
+#endif
 
 #if defined(AMIGA) && defined(__VBCC__) && defined(__PPC__)
 extern float rint(float x);

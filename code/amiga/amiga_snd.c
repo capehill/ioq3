@@ -64,8 +64,6 @@ cvar_t *sndspeed;
 cvar_t *sndchannels;
 /*uint32*/ ULONG samplepos;
 
-//struct AHIIFace *IAHI = NULL;
-
 static int speed;
 static UBYTE *dmabuf = NULL;
 static int buflen;
@@ -104,7 +102,7 @@ qboolean SNDDMA_Init(void)
 	EffHook.h_Data = 0;
 
 	sndbits = Cvar_Get("sndbits", "16", CVAR_ARCHIVE);
-	sndspeed = Cvar_Get("sndspeed", "22050", CVAR_ARCHIVE); // was 441000
+	sndspeed = Cvar_Get("sndspeed", "22050", CVAR_ARCHIVE); // was 441000 - Cowcat
 	sndchannels = Cvar_Get("sndchannels", "2", CVAR_ARCHIVE);
 
 	switch ((int)sndspeed->value)
@@ -122,17 +120,6 @@ qboolean SNDDMA_Init(void)
 
 	}
 	
-	/*
-	if (sndspeed->value == 44100)
-		speed = 44100;
-	else if (sndspeed->value == 22050)
-		speed = 22050;
-	else if (sndspeed->value == 11025) 
-		speed = 11025;
-	else 
-		speed = 11025;
-	*/
-
 	if (sndchannels->value == 2) 
 		ahichannels = 2;
 
@@ -195,7 +182,6 @@ qboolean SNDDMA_Init(void)
 	}
 
 	AHIBase = (struct Library *)AHIio->ahir_Std.io_Device;
-	//IAHI = (struct AHIIFace *)IExec->GetInterface(AHIBase, "main", 1, NULL);
 
 	if ((actrl = AHI_AllocAudio(AHIA_AudioID, AHI_DEFAULT_ID,
 					AHIA_MixFreq, 	speed,
@@ -309,14 +295,6 @@ void SNDDMA_Shutdown(void)
 		AHI_FreeAudio(actrl);
 		actrl = NULL;
 	}
-
-	/*
-	if (IAHI)
-	{
-		IExec->DropInterface((struct Interface *)IAHI);
-		IAHI = 0;
-	}
-	*/
 
 	if (AHIDevice == 0) 
 	{

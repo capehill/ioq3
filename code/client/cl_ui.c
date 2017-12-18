@@ -24,6 +24,17 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "../botlib/botlib.h"
 
+// Cowcat
+#if defined(AMIGA) && defined(__VBCC__)
+static ID_INLINE float _vmf(intptr_t x)
+{
+	floatint_t fi;
+	fi.i = (int) x;
+	return fi.f;
+}
+#define VMF(x)	_vmf(args[x])
+#endif
+
 extern	botlib_export_t	*botlib_export;
 
 vm_t *uivm;

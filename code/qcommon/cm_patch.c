@@ -414,11 +414,11 @@ PATCH COLLIDE GENERATION
 ================================================================================
 */
 
-static	int				numPlanes;
+static	int		numPlanes;
 static	patchPlane_t	planes[MAX_PATCH_PLANES];
 
-static	int				numFacets;
-static	facet_t			facets[MAX_PATCH_PLANES]; //maybe MAX_FACETS ??
+static	int		numFacets;
+static	facet_t		facets[MAX_FACETS]; // was MAX_PATCH_PLANES - Cowcat
 
 #define	NORMAL_EPSILON	0.0001
 #define	DIST_EPSILON	0.02

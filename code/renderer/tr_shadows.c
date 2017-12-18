@@ -249,8 +249,8 @@ void RB_ShadowTessEnd( void )
 	//qglGetBooleanv(GL_COLOR_WRITEMASK, rgba); // Cowcat
 	qglColorMask( GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE );
 
-	//qglEnable( GL_STENCIL_TEST );
-	//qglStencilFunc( GL_ALWAYS, 1, 255 );
+	//qglEnable( GL_STENCIL_TEST ); // Cowcat
+	//qglStencilFunc( GL_ALWAYS, 1, 255 ); // Cowcat
 
 	// mirrors have the culling order reversed
 	if ( backEnd.viewParms.isMirror )

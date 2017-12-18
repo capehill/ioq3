@@ -121,7 +121,13 @@ static inline float __fctiw(register float f) {
 
 #define DLL_EXT ".dll"
 #define OS_STRING "amigaos"
-#define ARCH_STRING "ppc"
+
+#if defined(__PPC__)
+#define ARCH_STRING "wos"
+#else
+#define ARCH_STRING "m68k"
+#endif
+
 #define Q3_BIG_ENDIAN
 
 #endif
@@ -404,13 +410,13 @@ float FloatSwap (const float *f);
 #error "Endianness not defined"
 #endif
 
-
+// Cowcat
 //platform string
-#ifdef NDEBUG
+//#ifdef NDEBUG
 #define PLATFORM_STRING OS_STRING "-" ARCH_STRING
-#else
-#define PLATFORM_STRING OS_STRING "-" ARCH_STRING "-debug"
-#endif
+//#else
+//#define PLATFORM_STRING OS_STRING "-" ARCH_STRING "-debug"
+//#endif
 
 #endif
 

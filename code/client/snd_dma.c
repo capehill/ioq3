@@ -800,7 +800,7 @@ void S_Base_ClearLoopingSounds( qboolean killall )
 	{
 		if (killall || loopSounds[i].kill == qtrue || (loopSounds[i].sfx && loopSounds[i].sfx->soundLength == 0))
 		{
-			loopSounds[i].kill = qfalse;
+			//loopSounds[i].kill = qfalse; // fix redundant - Cowcat
 			S_Base_StopLoopingSound(i);
 		}
 	}

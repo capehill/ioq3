@@ -149,7 +149,7 @@ vec3_t	bytedirs[NUMVERTEXNORMALS] =
 
 int Q_rand( int *seed )
 {
-	*seed = (69069 * *seed + 1);
+	*seed = (69069U * *seed + 1); // added U - new ioq3 - Cowcat
 	return *seed;
 }
 
@@ -310,6 +310,7 @@ RotatePointAroundVector
 This is not implemented very well...
 ===============
 */
+
 void RotatePointAroundVector( vec3_t dst, const vec3_t dir, const vec3_t point, float degrees )
 {
 	float	m[3][3];
@@ -1126,8 +1127,10 @@ int PlaneTypeForNormal (vec3_t normal)
 {
 	if ( normal[0] == 1.0 )
 		return PLANE_X;
+
 	if ( normal[1] == 1.0 )
 		return PLANE_Y;
+
 	if ( normal[2] == 1.0 )
 		return PLANE_Z;
 	
@@ -1141,6 +1144,7 @@ int PlaneTypeForNormal (vec3_t normal)
 MatrixMultiply
 ================
 */
+
 void MatrixMultiply(float in1[3][3], float in2[3][3], float out[3][3])
 {
 	out[0][0] = in1[0][0] * in2[0][0] + in1[0][1] * in2[1][0] + in1[0][2] * in2[2][0];
@@ -1154,7 +1158,6 @@ void MatrixMultiply(float in1[3][3], float in2[3][3], float out[3][3])
 	out[2][2] = in1[2][0] * in2[0][2] + in1[2][1] * in2[1][2] + in1[2][2] * in2[2][2];
 }
 
-
 void AngleVectors( const vec3_t angles, vec3_t forward, vec3_t right, vec3_t up)
 {
 	float		angle;
@@ -1167,9 +1170,6 @@ void AngleVectors( const vec3_t angles, vec3_t forward, vec3_t right, vec3_t up)
 	angle = angles[PITCH] * (M_PI*2 / 360);
 	sp = sin(angle);
 	cp = cos(angle);
-	angle = angles[ROLL] * (M_PI*2 / 360);
-	sr = sin(angle);
-	cr = cos(angle);
 
 	if (forward)
 	{
@@ -1178,20 +1178,28 @@ void AngleVectors( const vec3_t angles, vec3_t forward, vec3_t right, vec3_t up)
 		forward[2] = -sp;
 	}
 
-	if (right)
+	if ( right || up)
 	{
-		right[0] = (-1*sr*sp*cy+-1*cr*-sy);
-		right[1] = (-1*sr*sp*sy+-1*cr*cy);
-		right[2] = -1*sr*cp;
-	}
+		angle = angles[ROLL] * (M_PI*2 / 360);
+		sr = sin(angle);
+		cr = cos(angle);
+		
+		if (right)
+		{
+			right[0] = (-1*sr*sp*cy+-1*cr*-sy);
+			right[1] = (-1*sr*sp*sy+-1*cr*cy);
+			right[2] = -1*sr*cp;
+		}
 
-	if (up)
-	{
-		up[0] = (cr*sp*cy+-sr*-sy);
-		up[1] = (cr*sp*sy+-sr*cy);
-		up[2] = cr*cp;
+		if (up)
+		{
+			up[0] = (cr*sp*cy+-sr*-sy);
+			up[1] = (cr*sp*sy+-sr*cy);
+			up[2] = cr*cp;
+		}
 	}
 }
+
 
 /*
 ** assumes "src" is normalized

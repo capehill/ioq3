@@ -678,13 +678,17 @@ int Com_FilterPath(char *filter, char *name, int casesensitive)
 Com_HashKey
 ============
 */
-int Com_HashKey(char *string, int maxlen) {
-	int register hash, i;
+int Com_HashKey(char *string, int maxlen)
+{
+	int hash, i; // avoid register - Cowcat
 
 	hash = 0;
-	for (i = 0; i < maxlen && string[i] != '\0'; i++) {
+
+	for (i = 0; i < maxlen && string[i] != '\0'; i++)
+	{
 		hash += string[i] * (119 + i);
 	}
+
 	hash = (hash ^ (hash >> 10) ^ (hash >> 20));
 	return hash;
 }
@@ -1337,10 +1341,11 @@ Com_TouchMemory
 Touch all known used data to make sure it is paged in
 ===============
 */
-void Com_TouchMemory( void ) {
+void Com_TouchMemory( void )
+{
 	int		start, end;
 	int		i, j;
-	int		sum;
+	unsigned int	sum; // was int - new ioq3 - Cowcat
 	memblock_t	*block;
 
 	Z_CheckHeap();
@@ -1350,12 +1355,14 @@ void Com_TouchMemory( void ) {
 	sum = 0;
 
 	j = hunk_low.permanent >> 2;
+
 	for ( i = 0 ; i < j ; i+=64 ) {			// only need to touch each page
 		sum += ((int *)s_hunkData)[i];
 	}
 
 	i = ( s_hunkTotal - hunk_high.permanent ) >> 2;
 	j = hunk_high.permanent >> 2;
+
 	for (  ; i < j ; i+=64 ) {			// only need to touch each page
 		sum += ((int *)s_hunkData)[i];
 	}
@@ -1962,16 +1969,35 @@ void Com_QueueEvent( int time, sysEventType_t type, int value, int value2, int p
 {
 	sysEvent_t  *ev;
 
+	#if 1 // new ioq3 sources - Cowcat
+
+	// combine mouse movement with previous mouse event
+	if( type == SE_MOUSE && eventHead != eventTail )
+	{
+		ev = &eventQueue[ (eventHead + MAX_QUEUED_EVENTS - 1 ) & MASK_QUEUED_EVENTS ];
+
+		if ( ev->evType == SE_MOUSE )
+		{
+			ev->evValue += value;
+			ev->evValue2 += value2;
+			return;
+		}
+	}
+
+	#endif
+
 	ev = &eventQueue[ eventHead & MASK_QUEUED_EVENTS ];
 
 	if ( eventHead - eventTail >= MAX_QUEUED_EVENTS )
 	{
 		Com_Printf("Com_QueueEvent: overflow\n");
+
 		// we are discarding an event, but don't leak memory
 		if ( ev->evPtr )
 		{
 			Z_Free( ev->evPtr );
 		}
+
 		eventTail++;
 	}
 
@@ -2012,6 +2038,7 @@ sysEvent_t Com_GetSystemEvent( void )
 
 	// check for console commands
 	s = Sys_ConsoleInput();
+
 	if ( s )
 	{
 		char  *b;
@@ -2025,6 +2052,7 @@ sysEvent_t Com_GetSystemEvent( void )
 
 	// check for network packets
 	MSG_Init( &netmsg, sys_packetReceived, sizeof( sys_packetReceived ) );
+
 	if ( Sys_GetPacket ( &adr, &netmsg ) )
 	{
 		netadr_t  *buf;

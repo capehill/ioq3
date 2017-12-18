@@ -361,6 +361,7 @@ void	*VM_ExplicitArgPtr( vm_t *vm, intptr_t intValue );
 
 #define VMA(x) VM_ArgPtr(args[x])
 
+#if !defined(AMIGA) && !defined(__VBCC__)
 static ID_INLINE float _vmf(intptr_t x)
 {
 	floatint_t fi;
@@ -368,7 +369,7 @@ static ID_INLINE float _vmf(intptr_t x)
 	return fi.f;
 }
 #define VMF(x)	_vmf(args[x])
-
+#endif
 
 /*
 ==============================================================

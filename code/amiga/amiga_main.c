@@ -34,6 +34,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include <exec/ports.h>
 #include <intuition/intuition.h>
 #include <dos/dos.h>
+#include <devices/timer.h>
 #include <proto/dos.h>
 #include <proto/exec.h>
 #include <proto/timer.h>
@@ -52,8 +53,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define DeleteExtIO(p) DeleteIORequest(p)
 #endif
 
-//struct Device *TimerBase;//struct Library *TimerBase;
-//struct Library *SocketBase;//struct TimerIFace *ITimer = 0;
 struct MsgPort *Sys_EventPort = 0;
 
 int	totalMsec, countMsec;
@@ -68,9 +67,9 @@ byte sys_packetReceived[MAX_MSGLEN];
 
 #define MEM_THRESHOLD 96*1024*1024
 
-qboolean Sys_LowPhysicalMemory() 
+qboolean Sys_LowPhysicalMemory() // It is always true - Cowcat
 {
-	return qtrue;
+	return qtrue; 
 	
 	ULONG avail = AvailMem(MEMF_FAST);
 
@@ -129,6 +128,7 @@ void *Sys_LoadDll( const char *name, char *fqpath ,int (**entryPoint)(int, ...),
 	}
 	
 	dllEntry(systemcalls);
+
 	if (libHandle)
 		Q_strncpyz(fqpath, fn, MAX_QPATH);
 		
@@ -153,14 +153,12 @@ void Sys_BeginProfiling( void )
 {
 }
 
-static struct timerequest *timerio;
+struct timerequest *timerio;
+struct MsgPort *timerport;
 struct Library *TimerBase;
 
 void Timer_Init(void)
 {
-	struct MsgPort	*timerport;
-	//struct Library *TimerBase;
-
 	if (timerport = CreateMsgPort ())
 	{
 		if (timerio = (struct timerequest *) CreateExtIO(timerport,sizeof(struct timerequest)))
@@ -189,19 +187,10 @@ void Timer_Init(void)
 		Sys_Error("Can't open timer.device");
 
 	//TimerBase = (struct Device *)FindName(&SysBase->DeviceList,"timer.device");
-	//ITimer = (struct TimerIFace *)GetInterface((struct Library *)TimerBase,"main", 1, NULL);
 }
 
 void Timer_Term(void)
 {
-	/*
-	if (ITimer)
-	{
-		DropInterface((struct Interface *)ITimer);
-		ITimer = NULL;
-	}
-	*/
-
 	if (TimerBase)
 	{
 		if (!CheckIO((struct IORequest *)timerio))
@@ -214,7 +203,6 @@ void Timer_Term(void)
 		DeletePort(timerio->tr_node.io_Message.mn_ReplyPort);
 		DeleteExtIO((struct IORequest *)timerio);
 	}
-
 }
 		
 	

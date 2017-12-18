@@ -7,7 +7,7 @@ INCLUDES = -ISystem:PosixLib/include # -ISystem:amitcp/netinclude
 CFLAGS = -c99 -O2 -speed -cpu=68060 -fpu=68060 -maxoptpasses=20 $(INCLUDES) -DAMIGA -DMINIGL -DBOTLIB -DNO_VM_COMPILED
 
 DO_CC = $(CC) $(CFLAGS) -o $@ -c $<
-LIBS  = -lm060 -lmglQ2 -lposix -lamiga
+LIBS  = -lm060 -lmglQ3 -lposix -lamiga
 
 #VM_JIT = vm_ppc.o
 

@@ -25,6 +25,17 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "../botlib/botlib.h"
 
+// Cowcat
+#if defined(AMIGA) && defined(__VBCC__)
+static ID_INLINE float _vmf(intptr_t x)
+{
+	floatint_t fi;
+	fi.i = (int) x;
+	return fi.f;
+}
+#define VMF(x)	_vmf(args[x])
+#endif
+
 botlib_export_t	*botlib_export;
 
 void SV_GameError( const char *string ) {
@@ -225,18 +236,18 @@ void SV_AdjustAreaPortalState( sharedEntity_t *ent, qboolean open ) {
 SV_GameAreaEntities
 ==================
 */
-qboolean	SV_EntityContact( vec3_t mins, vec3_t maxs, const sharedEntity_t *gEnt, int capsule ) {
+qboolean SV_EntityContact( vec3_t mins, vec3_t maxs, const sharedEntity_t *gEnt, int capsule )
+{
 	const float	*origin, *angles;
 	clipHandle_t	ch;
-	trace_t			trace;
+	trace_t		trace;
 
 	// check for exact collision
 	origin = gEnt->r.currentOrigin;
 	angles = gEnt->r.currentAngles;
 
 	ch = SV_ClipHandleForEntity( gEnt );
-	CM_TransformedBoxTrace ( &trace, vec3_origin, vec3_origin, mins, maxs,
-		ch, -1, origin, angles, capsule );
+	CM_TransformedBoxTrace ( &trace, vec3_origin, vec3_origin, mins, maxs, ch, -1, origin, angles, capsule );
 
 	return trace.startsolid;
 }

@@ -378,23 +378,29 @@ void AAS_UnlinkInvalidEntities(void)
 //===========================================================================
 int AAS_NearestEntity(vec3_t origin, int modelindex)
 {
-	int i, bestentnum;
-	float dist, bestdist;
-	aas_entity_t *ent;
-	vec3_t dir;
+	int 		i, bestentnum;
+	float 		dist, bestdist;
+	aas_entity_t 	*ent;
+	vec3_t 		dir;
 
 	bestentnum = 0;
 	bestdist = 99999;
+
 	for (i = 0; i < aasworld.maxentities; i++)
 	{
 		ent = &aasworld.entities[i];
-		if (ent->i.modelindex != modelindex) continue;
+
+		if (ent->i.modelindex != modelindex)
+			continue;
+
 		VectorSubtract(ent->i.origin, origin, dir);
-		if (abs(dir[0]) < 40)
+
+		if (fabs(dir[0]) < 40) // was abs - Cowcat
 		{
-			if (abs(dir[1]) < 40)
+			if (fabs(dir[1]) < 40) // was abs - Cowcat
 			{
 				dist = VectorLength(dir);
+
 				if (dist < bestdist)
 				{
 					bestdist = dist;
@@ -403,6 +409,7 @@ int AAS_NearestEntity(vec3_t origin, int modelindex)
 			} //end if
 		} //end if
 	} //end for
+
 	return bestentnum;
 } //end of the function AAS_NearestEntity
 //===========================================================================

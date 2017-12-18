@@ -122,26 +122,31 @@ void AAS_InitSettings(void)
 //===========================================================================
 int AAS_AgainstLadder(vec3_t origin)
 {
-	int areanum, i, facenum, side;
-	vec3_t org;
-	aas_plane_t *plane;
-	aas_face_t *face;
-	aas_area_t *area;
+	int		areanum, i, facenum, side;
+	vec3_t		org;
+	aas_plane_t	*plane;
+	aas_face_t	*face;
+	aas_area_t	*area;
 
 	VectorCopy(origin, org);
 	areanum = AAS_PointAreaNum(org);
+
 	if (!areanum)
 	{
 		org[0] += 1;
 		areanum = AAS_PointAreaNum(org);
+
 		if (!areanum)
 		{
 			org[1] += 1;
 			areanum = AAS_PointAreaNum(org);
+
 			if (!areanum)
 			{
 				org[0] -= 2;
+
 				areanum = AAS_PointAreaNum(org);
+
 				if (!areanum)
 				{
 					org[1] -= 2;
@@ -150,6 +155,7 @@ int AAS_AgainstLadder(vec3_t origin)
 			} //end if
 		} //end if
 	} //end if
+
 	//if in solid... wrrr shouldn't happen
 	if (!areanum) return qfalse;
 	//if not in a ladder area
@@ -158,23 +164,27 @@ int AAS_AgainstLadder(vec3_t origin)
 	if (!(aasworld.areasettings[areanum].presencetype & PRESENCE_NORMAL)) return qfalse;
 	//
 	area = &aasworld.areas[areanum];
+
 	for (i = 0; i < area->numfaces; i++)
 	{
 		facenum = aasworld.faceindex[area->firstface + i];
 		side = facenum < 0;
 		face = &aasworld.faces[abs(facenum)];
+
 		//if the face isn't a ladder face
 		if (!(face->faceflags & FACE_LADDER)) continue;
 		//get the plane the face is in
 		plane = &aasworld.planes[face->planenum ^ side];
+
 		//if the origin is pretty close to the plane
-		if (abs(DotProduct(plane->normal, origin) - plane->dist) < 3)
+		if (fabs(DotProduct(plane->normal, origin) - plane->dist) < 3) // was abs - Cowcat
 		{
 			if (AAS_PointInsideFace(abs(facenum), origin, 0.1f)) return qtrue;
 		} //end if
 	} //end for
 	return qfalse;
 } //end of the function AAS_AgainstLadder
+
 //===========================================================================
 // returns qtrue if the bot is on the ground
 //

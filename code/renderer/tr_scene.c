@@ -22,18 +22,18 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "tr_local.h"
 
-int			r_firstSceneDrawSurf;
+int	r_firstSceneDrawSurf;
 
-int			r_numdlights;
-int			r_firstSceneDlight;
+int	r_numdlights;
+int	r_firstSceneDlight;
 
-int			r_numentities;
-int			r_firstSceneEntity;
+int	r_numentities;
+int	r_firstSceneEntity;
 
-int			r_numpolys;
-int			r_firstScenePoly;
+int	r_numpolys;
+int	r_firstScenePoly;
 
-int			r_numpolyverts;
+int	r_numpolyverts;
 
 
 /*
@@ -42,12 +42,17 @@ R_ToggleSmpFrame
 
 ====================
 */
-void R_ToggleSmpFrame( void ) {
-	if ( r_smp->integer ) {
+void R_ToggleSmpFrame( void )
+{
+	if ( r_smp->integer )
+	{
 		// use the other buffers next frame, because another CPU
 		// may still be rendering into the current ones
 		tr.smpFrame ^= 1;
-	} else {
+	}
+
+	else
+	{
 		tr.smpFrame = 0;
 	}
 
@@ -74,7 +79,8 @@ RE_ClearScene
 
 ====================
 */
-void RE_ClearScene( void ) {
+void RE_ClearScene( void )
+{
 	r_firstSceneDlight = r_numdlights;
 	r_firstSceneEntity = r_numentities;
 	r_firstScenePoly = r_numpolys;
@@ -95,15 +101,17 @@ R_AddPolygonSurfaces
 Adds all the scene's polys into this view's drawsurf list
 =====================
 */
-void R_AddPolygonSurfaces( void ) {
-	int			i;
+void R_AddPolygonSurfaces( void )
+{
+	int		i;
 	shader_t	*sh;
 	srfPoly_t	*poly;
 
 	tr.currentEntityNum = ENTITYNUM_WORLD;
 	tr.shiftedEntityNum = tr.currentEntityNum << QSORT_ENTITYNUM_SHIFT;
 
-	for ( i = 0, poly = tr.refdef.polys; i < tr.refdef.numPolys ; i++, poly++ ) {
+	for ( i = 0, poly = tr.refdef.polys; i < tr.refdef.numPolys ; i++, poly++ )
+	{
 		sh = R_GetShaderByHandle( poly->hShader );
 		R_AddDrawSurf( ( void * )poly, sh, poly->fogIndex, qfalse );
 	}
@@ -115,7 +123,8 @@ RE_AddPolyToScene
 
 =====================
 */
-void RE_AddPolyToScene( qhandle_t hShader, int numVerts, const polyVert_t *verts, int numPolys ) {
+void RE_AddPolyToScene( qhandle_t hShader, int numVerts, const polyVert_t *verts, int numPolys )
+{
 	srfPoly_t	*poly;
 	int			i, j;
 	int			fogIndex;
@@ -284,22 +293,27 @@ Rendering a scene may require multiple views to be rendered
 to handle mirrors,
 @@@@@@@@@@@@@@@@@@@@@
 */
-void RE_RenderScene( const refdef_t *fd ) {
-	viewParms_t		parms;
-	int				startTime;
+void RE_RenderScene( const refdef_t *fd )
+{
+	viewParms_t	parms;
+	int		startTime;
 
-	if ( !tr.registered ) {
+	if ( !tr.registered )
+	{
 		return;
 	}
-	GLimp_LogComment( "====== RE_RenderScene =====\n" );
 
-	if ( r_norefresh->integer ) {
+	//GLimp_LogComment( "====== RE_RenderScene =====\n" ); // Cowcat
+
+	if ( r_norefresh->integer )
+	{
 		return;
 	}
 
 	startTime = ri.Milliseconds();
 
-	if (!tr.world && !( fd->rdflags & RDF_NOWORLDMODEL ) ) {
+	if (!tr.world && !( fd->rdflags & RDF_NOWORLDMODEL ) )
+	{
 		ri.Error (ERR_DROP, "R_RenderScene: NULL worldmodel");
 	}
 
@@ -323,18 +337,23 @@ void RE_RenderScene( const refdef_t *fd ) {
 	// copy the areamask data over and note if it has changed, which
 	// will force a reset of the visible leafs even if the view hasn't moved
 	tr.refdef.areamaskModified = qfalse;
-	if ( ! (tr.refdef.rdflags & RDF_NOWORLDMODEL) ) {
-		int		areaDiff;
-		int		i;
+
+	if ( ! (tr.refdef.rdflags & RDF_NOWORLDMODEL) )
+	{
+		int	areaDiff;
+		int	i;
 
 		// compare the area bits
 		areaDiff = 0;
-		for (i = 0 ; i < MAX_MAP_AREA_BYTES/4 ; i++) {
+
+		for (i = 0 ; i < MAX_MAP_AREA_BYTES/4 ; i++)
+		{
 			areaDiff |= ((int *)tr.refdef.areamask)[i] ^ ((int *)fd->areamask)[i];
 			((int *)tr.refdef.areamask)[i] = ((int *)fd->areamask)[i];
 		}
 
-		if ( areaDiff ) {
+		if ( areaDiff )
+		{
 			// a door just opened or something
 			tr.refdef.areamaskModified = qtrue;
 		}
@@ -359,9 +378,8 @@ void RE_RenderScene( const refdef_t *fd ) {
 
 	// turn off dynamic lighting globally by clearing all the
 	// dlights if it needs to be disabled or if vertex lighting is enabled
-	if ( r_dynamiclight->integer == 0 ||
-		 r_vertexLight->integer == 1 ||
-		 glConfig.hardwareType == GLHW_PERMEDIA2 ) {
+	if ( r_dynamiclight->integer == 0 || r_vertexLight->integer == 1 || glConfig.hardwareType == GLHW_PERMEDIA2 )
+	{
 		tr.refdef.num_dlights = 0;
 	}
 
@@ -408,3 +426,4 @@ void RE_RenderScene( const refdef_t *fd ) {
 
 	tr.frontEndMsec += ri.Milliseconds() - startTime;
 }
+

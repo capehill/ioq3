@@ -1581,13 +1581,16 @@ void CIN_DrawCinematic (int handle) {
 	cinTable[handle].dirty = qfalse;
 }
 
-void CL_PlayCinematic_f(void) {
-	char	*arg, *s;
+void CL_PlayCinematic_f(void)
+{
+	char		*arg, *s;
 	qboolean	holdatend;
-	int bits = CIN_system;
+	int 		bits = CIN_system;
 
 	Com_DPrintf("CL_PlayCinematic_f\n");
-	if (cls.state == CA_CINEMATIC) {
+
+	if (cls.state == CA_CINEMATIC)
+	{
 		SCR_StopCinematic();
 	}
 
@@ -1595,21 +1598,30 @@ void CL_PlayCinematic_f(void) {
 	s = Cmd_Argv(2);
 
 	holdatend = qfalse;
-	if ((s && s[0] == '1') || Q_stricmp(arg,"demoend.roq")==0 || Q_stricmp(arg,"end.roq")==0) {
+
+	if ((s && s[0] == '1') || Q_stricmp(arg,"demoend.roq")==0 || Q_stricmp(arg,"end.roq")==0)
+	{
 		bits |= CIN_hold;
 	}
-	if (s && s[0] == '2') {
+
+	if (s && s[0] == '2')
+	{
 		bits |= CIN_loop;
 	}
 
 	S_StopAllSounds ();
 
-	#if 0 // Cowcat
+	#if 0 // Cowcat - still doesn´t work
+
 	CL_handle = CIN_PlayCinematic( arg, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, bits );
-	if (CL_handle >= 0) {
-		do {
+
+	if (CL_handle >= 0)
+	{
+		do
+		{
 			SCR_RunCinematic();
-		} while (cinTable[currentHandle].buf == NULL && cinTable[currentHandle].status == FMV_PLAY);		// wait for first frame (load codebook and sound)
+
+		} while (cinTable[currentHandle].buf == NULL && cinTable[currentHandle].status == FMV_PLAY); // wait for first frame (load codebook and sound)
 	}
 	#endif
 }

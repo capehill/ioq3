@@ -305,6 +305,12 @@ static qboolean GLW_StartDriverAndSetMode( const char *drivername, int mode, int
 	if (fullscreen && r_closeworkbench->value)
 		mglProposeCloseDesktop(GL_TRUE);
 
+	// That cleans windowmode - Cowcat
+	qglClearColor(0,0,0,1);
+	qglClear(GL_COLOR_BUFFER_BIT);
+
+	//
+
 	return qtrue;
 }
 	
@@ -566,7 +572,7 @@ void GLimp_Shutdown(void)
 	memset( &glState, 0, sizeof( glState ) );
 }
 
-
+#if 0 // Cowcat
 void GLimp_LogComment( char *comment ) 
 {
 	/*
@@ -576,6 +582,7 @@ void GLimp_LogComment( char *comment )
 	}
 	*/
 }
+#endif
 
 void GLimp_EndFrame(void)
 {

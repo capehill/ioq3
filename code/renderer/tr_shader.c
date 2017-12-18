@@ -982,6 +982,8 @@ static qboolean ParseStage( shaderStage_t *stage, char **text )
 			{
 				vec3_t	color;
 
+				VectorClear(color); // fix ioq3 - Cowcat
+
 				ParseVector( text, 3, color );
 				stage->constantColor[0] = 255 * color[0];
 				stage->constantColor[1] = 255 * color[1];
@@ -2499,6 +2501,30 @@ static void VertexLightingCollapse( void )
 	}
 }
 
+
+/* 
+=========================
+InitShader
+=========================
+*/
+
+static void InitShader( const char *name, int lightmapIndex)
+{
+	int i;
+
+	// clear the global shader
+	Com_Memset( &shader, 0, sizeof( shader ) );
+	Com_Memset( &stages, 0, sizeof( stages ) );
+
+	Q_strncpyz(shader.name, name, sizeof(shader.name));
+	shader.lightmapIndex = lightmapIndex;
+
+	for ( i = 0 ; i < MAX_SHADER_STAGES ; i++ )
+	{
+		stages[i].bundle[0].texMods = texMods[i];
+	}
+}
+
 /*
 =========================
 FinishShader
@@ -2507,6 +2533,7 @@ Returns a freshly allocated shader with all the needed info
 from the current global working shader
 =========================
 */
+
 static shader_t *FinishShader( void )
 {
 	int		stage;
@@ -2916,6 +2943,7 @@ shader_t *R_FindShader( const char *name, int lightmapIndex, qboolean mipRawImag
 		R_SyncRenderThread();
 	}
 
+	#if 0
 	// clear the global shader
 	Com_Memset( &shader, 0, sizeof( shader ) );
 	Com_Memset( &stages, 0, sizeof( stages ) );
@@ -2926,6 +2954,12 @@ shader_t *R_FindShader( const char *name, int lightmapIndex, qboolean mipRawImag
 	{
 		stages[i].bundle[0].texMods = texMods[i];
 	}
+
+	#else
+
+	InitShader(strippedName, lightmapIndex);
+
+	#endif
 
 	// FIXME: set these "need" values apropriately
 	shader.needsNormal = qtrue;
@@ -3078,6 +3112,7 @@ qhandle_t RE_RegisterShaderFromImage(const char *name, int lightmapIndex, image_
 		R_SyncRenderThread();
 	}
 
+	#if 0
 	// clear the global shader
 	Com_Memset( &shader, 0, sizeof( shader ) );
 	Com_Memset( &stages, 0, sizeof( stages ) );
@@ -3088,6 +3123,12 @@ qhandle_t RE_RegisterShaderFromImage(const char *name, int lightmapIndex, image_
 	{
 		stages[i].bundle[0].texMods = texMods[i];
 	}
+
+	#else // Cowcat
+
+	InitShader( name, lightmapIndex);
+
+	#endif
 
 	// FIXME: set these "need" values apropriately
 	shader.needsNormal = qtrue;
@@ -3580,6 +3621,7 @@ static void CreateInternalShaders( void )
 {
 	tr.numShaders = 0;
 
+	#if 0
 	// init the default shader
 	Com_Memset( &shader, 0, sizeof( shader ) );
 	Com_Memset( &stages, 0, sizeof( stages ) );
@@ -3587,6 +3629,13 @@ static void CreateInternalShaders( void )
 	Q_strncpyz( shader.name, "<default>", sizeof( shader.name ) );
 
 	shader.lightmapIndex = LIGHTMAP_NONE;
+
+	#else // Cowcat
+
+	InitShader( "<default>", LIGHTMAP_NONE );
+
+	#endif
+
 	stages[0].bundle[0].image[0] = tr.defaultImage;
 	stages[0].active = qtrue;
 	stages[0].stateBits = GLS_DEFAULT;

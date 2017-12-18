@@ -82,9 +82,11 @@ long myftol( float f );
 // see QSORT_SHADERNUM_SHIFT
 #define MAX_SHADERS		16384
 
+#if 0 // not used - Cowcat
 //#define MAX_SHADER_STATES 	2048
 #define MAX_STATES_PER_SHADER 	32
 #define MAX_STATE_NAME		32
+#endif
 
 // can't be increased without changing bit packing for drawsurfs
 
@@ -296,6 +298,7 @@ typedef struct {
 	float		bulgeWidth;
 	float		bulgeHeight;
 	float		bulgeSpeed;
+
 } deformStage_t;
 
 
@@ -339,7 +342,7 @@ typedef struct {
 
 	int			videoMapHandle;
 	qboolean		isLightmap;
-	qboolean		vertexLightmap;
+	//qboolean		vertexLightmap; // is never true - Cowcat
 	qboolean		isVideoMap;
 
 } textureBundle_t;
@@ -457,20 +460,21 @@ typedef struct shader_s {
 	float		clampTime;		// time this shader is clamped to
 	float		timeOffset;		// current time offset for this shader
 
-	int		numStates;		// if non-zero this is a state shader
-	struct shader_s *currentShader;		// current state if this is a state shader
-	struct shader_s *parentShader;		// current state if this is a state shader
-	int		currentState;		// current state index for cycle purposes
-	long		expireTime;		// time in milliseconds this expires
+	//int		numStates;		// if non-zero this is a state shader
+	//struct shader_s *currentShader;	// current state if this is a state shader
+	//struct shader_s *parentShader;	// current state if this is a state shader
+	//int		currentState;		// current state index for cycle purposes
+	//long		expireTime;		// time in milliseconds this expires
 
 	struct shader_s *remappedShader;	// current shader this one is remapped too
 
-	int		shaderStates[MAX_STATES_PER_SHADER];	// index to valid shader states
+	//int		shaderStates[MAX_STATES_PER_SHADER];	// index to valid shader states
 
 	struct shader_s *next;
 
 } shader_t;
 
+#if 0 // not used -Cowcat
 typedef struct shaderState_s {
 	char shaderName[MAX_QPATH];	// name of shader this state belongs to
 	char name[MAX_STATE_NAME];	// name of this state
@@ -479,6 +483,7 @@ typedef struct shaderState_s {
 	shader_t *shader;
 
 } shaderState_t;
+#endif
 
 
 // trRefdef_t holds everything that comes in refdef_t,
@@ -598,10 +603,11 @@ typedef enum {
 #endif
 	SF_FLARE,
 	SF_ENTITY,				// beams, rails, lightning, etc that can be determined by entity
-	SF_DISPLAY_LIST,
+	//SF_DISPLAY_LIST,			// never used - Cowcat
 
 	SF_NUM_SURFACE_TYPES,
 	SF_MAX = 0x7fffffff			// ensures that sizeof( surfaceType_t ) == sizeof( int )
+
 } surfaceType_t;
 
 typedef struct drawSurf_s {
@@ -627,12 +633,13 @@ typedef struct srfPoly_s {
 
 } srfPoly_t;
 
+#if 0 // never used - Cowcat
 typedef struct srfDisplayList_s {
 	surfaceType_t	surfaceType;
 	int		listNum;
 
 } srfDisplayList_t;
-
+#endif
 
 typedef struct srfFlare_s {
 	surfaceType_t		surfaceType;
@@ -1018,7 +1025,7 @@ typedef struct {
 
 	int					viewCluster;
 
-	vec3_t					sunLight;			// from the sky shader for this level
+	vec3_t					sunLight;		// from the sky shader for this level
 	vec3_t					sunDirection;
 
 	frontEndCounters_t			pc;
@@ -1492,7 +1499,7 @@ SKIES
 void R_BuildCloudData( shaderCommands_t *shader );
 void R_InitSkyTexCoords( float cloudLayerHeight );
 void R_DrawSkyBox( shaderCommands_t *shader );
-void RB_DrawSun( void );
+void RB_DrawSun( float scale, shader_t *shader);
 void RB_ClipSkyPolygons( shaderCommands_t *shader );
 
 /*

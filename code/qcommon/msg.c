@@ -1051,6 +1051,7 @@ typedef struct {
 
 #if defined(AMIGA) && defined(__VBCC__)
 
+// old workaround - Cowcat
 #define NETF(x) (size_t)offsetof(entityState_t,x)
 #define NETF1(x) (size_t)offsetof(entityState_t,x) + offsetof(entityState_t,x)
 #define NETF2(x) (size_t)offsetof(entityState_t,x) + offsetof(entityState_t,x) + offsetof(entityState_t,x) // dummy
@@ -1058,116 +1059,62 @@ typedef struct {
 #define NETFP(x,y) (size_t)NETF(x) + offsetof(trajectory_t,y)
 #define NETFP1(x,y) (size_t)NETF(x) + offsetof(trajectory_t,y) + offsetof(trajectory_t,y) // dummy
 #define NETFP2(x,y) (size_t)NETF(x) + offsetof(trajectory_t,y) + offsetof(trajectory_t,y) + offsetof(trajectory_t,y) // dummy
+//
 
+// pasted offsets from gcc output :( - Cowcat
 netField_t entityStateFields[] = 
 {
-{ "pos.trTime",NETFP(pos,trTime), 32 },
-
-//{ "pos.trBase[0]",NETFP(pos,trBase[0]), 0 },
-{ "pos.trBase[0]",NETFP(pos,trBase), 0 },
-
-//{ NETF(pos.trBase[1]), 0 },
-{ "pos.trBase[1]",NETFP1( pos,trBase ), 0 },
-
-//{ NETF(pos.trDelta[0]), 0 },
-{ "pos.trDelta[0]",NETFP(pos,trDelta), 0 },
-
-//{ NETF(pos.trDelta[1]), 0 },
-{ "pos.trDelta[1]",NETFP1(pos,trDelta), 0 },
-
-//{ NETF(pos.trBase[2]), 0 },
-{ "pos.trBase[2]",NETFP2(pos,trBase), 0 },
-
-//{ NETF(apos.trBase[1]), 0 },
-{ "apos.trBase[1]",NETFP1(apos,trBase), 0 },
-
-//{ NETF(pos.trDelta[2]), 0 },
-{ "pos.trDelta[2]",NETFP2(pos,trDelta), 0 },
-
-//{ NETF(apos.trBase[0]), 0 },
-{ "apos.trBase[0]",NETFP(apos,trBase), 0 },
-
-{ "event", NETF(event), 10 },
-
-//{ NETF(angles2[1]), 0 },
-{ "angles2[1]",NETF1(angles2), 0 },
-
-{ "etype",NETF(eType), 8 },
-{ "torsoAnim",NETF(torsoAnim), 8 },
-{ "evenParm",NETF(eventParm), 8 },
-{ "legsAnim",NETF(legsAnim), 8 },
-{ "groundEntityNum",NETF(groundEntityNum), GENTITYNUM_BITS },
-{ "pos.trType",NETFP(pos,trType), 8 },
-{ "eFlags",NETF(eFlags), 19 },
-{ "otherEntityNum",NETF(otherEntityNum), GENTITYNUM_BITS },
-{ "weapon",NETF(weapon), 8 },
-{ "clientNum",NETF(clientNum), 8 },
-
-//{ NETF(angles[1]), 0 },
-{ "angles[1]",NETF1(angles), 0 },
-
-{ "pos.trDuration",NETFP(pos,trDuration), 32 },
-{ "apos.trType",NETFP(apos,trType), 8 },
-
-//{ NETF(origin[0]), 0 },
-{ "origin[0]",NETF(origin), 0 },
-
-//{ NETF(origin[1]), 0 },
-{ "origin[1]",NETF1(origin), 0 },
-
-//{ NETF(origin[2]), 0 },
-{ "origin[2]",NETF2(origin), 0 },
-
-{ "solid",NETF(solid), 24 },
-{ "powerups",NETF(powerups), MAX_POWERUPS },
-{ "modelindex",NETF(modelindex), 8 },
-{ "otherEntityNum2",NETF(otherEntityNum2), GENTITYNUM_BITS },
-{ "loopSound",NETF(loopSound), 8 },
-{ "generic1",NETF(generic1), 8 },
-
-//{ NETF(origin2[2]), 0 },
-{ "origin2[2]",NETF2(origin2), 0 },
-
-//{ NETF(origin2[0]), 0 },
-{ "origin2[0]",NETF(origin2), 0 },
-
-//{ NETF(origin2[1]), 0 },
-{ "origin2[1]",NETF1(origin2), 0 },
-
-{ "modelindex2",NETF(modelindex2), 8 },
-
-//{ NETF(angles[0]), 0 },
-{ "angles[0]",NETF(angles), 0 },
-
-{ "time",NETF(time), 32 },
-{ "apos.trTime",NETFP(apos,trTime), 32 },
-{ "apos.trDuration",NETFP(apos,trDuration), 32 },
-
-//{ NETF(apos.trBase[2]), 0 },
-{ "apos.trBase[2]",NETFP2(apos,trBase), 0 },
-
-//{ NETF(apos.trDelta[0]), 0 },
-{ "apos.trDelta[0]",NETFP(apos,trDelta), 0 },
-
-//{ NETF(apos.trDelta[1]), 0 },
-{ "apos.trDelta[1]",NETFP1(apos,trDelta), 0 },
-
-//{ NETF(apos.trDelta[2]), 0 },
-{ "apos.trDelta[2]",NETFP2(apos,trDelta), 0 },
-
-{ "time2",NETF(time2), 32 },
-
-//{ NETF(angles[2]), 0 },
-{ "angles[2]",NETF2(angles), 0 },
-
-//{ NETF(angles2[0]), 0 },
-{ "angles2[0]",NETF(angles2), 0 },
-
-//{ NETF(angles2[2]), 0 },
-{ "angles2[2]",NETF2(angles2), 0 },
-
-{ "constantLight",NETF(constantLight), 32 },
-{ "frame",NETF(frame), 16 }
+{ "pos.trTime",16 , 32 },
+{ "pos.trBase[0]",24 , 0 },
+{ "pos.trBase[1]",28 , 0 },
+{ "pos.trDelta[0]",36 , 0 },
+{ "pos.trDelta[1]",40 , 0 },
+{ "pos.trBase[2]",32 , 0 },
+{ "apos.trBase[1]",64 , 0 },
+{ "pos.trDelta[2]",44 , 0 },
+{ "apos.trBase[0]",60 , 0 },
+{ "event",180 , 10 },
+{ "angles2[1]",132 , 0 },
+{ "etype",4 , 8 },
+{ "torsoAnim",200 , 8 },
+{ "evenParm",184 , 8 },
+{ "legsAnim",196 , 8 },
+{ "groundEntityNum",148 , GENTITYNUM_BITS },
+{ "pos.trType",12 , 8 },
+{ "eFlags",8 , 19 },
+{ "otherEntityNum",140 , GENTITYNUM_BITS },
+{ "weapon",192 , 8 },
+{ "clientNum",168 , 8 },
+{ "angles[1]",120 , 0 },
+{ "pos.trDuration",20 , 32 },
+{ "apos.trType",48 , 8 },
+{ "origin[0]",92 , 0 },
+{ "origin[1]",96 , 0 },
+{ "origin[2]",100 , 0 },
+{ "solid",176 , 24 },
+{ "powerups",188 , MAX_POWERUPS },
+{ "modelindex",160, 8 },
+{ "otherEntityNum2",144 , GENTITYNUM_BITS },
+{ "loopSound",156 , 8 },
+{ "generic1",204 , 8 },
+{ "origin2[2]",112 , 0 },
+{ "origin2[0]",104 , 0 },
+{ "origin2[1]",108 , 0 },
+{ "modelindex2",164 , 8 },
+{ "angles[0]",116 , 0 },
+{ "time",84 , 32 },
+{ "apos.trTime",52 , 32 },
+{ "apos.trDuration",56 , 32 },
+{ "apos.trBase[2]",68 , 0 },
+{ "apos.trDelta[0]",72 , 0 },
+{ "apos.trDelta[1]",76 , 0 },
+{ "apos.trDelta[2]",80, 0 },
+{ "time2",88 , 32 },
+{ "angles[2]",124 , 0 },
+{ "angles2[0]",128 , 0 },
+{ "angles2[2]",136 , 0 },
+{ "constantLight",152 , 32 },
+{ "frame",172 , 16 }
 };
 
 #else
@@ -1571,108 +1518,63 @@ plyer_state_t communication
 
 #if defined(AMIGA) && defined(__VBCC__)
 
+// old workaround - Cowcat
 #define PSF(x) (size_t)offsetof(playerState_t,x)
-
 #define PSF1(x) (size_t)offsetof(playerState_t,x) + offsetof(playerState_t,x)
 #define PSF2(x) (size_t)offsetof(playerState_t,x) + offsetof(playerState_t,x) + offsetof(playerState_t,x) // dummy
+//
 
+// cut paste offsets from gcc output :( - Cowcat
 netField_t playerStateFields[] = 
 {
-{ "commandTime",PSF(commandTime), 32 },
-				
-//{ PSF(origin[0]), 0 },
-{ "origin[0]",PSF(origin), 0 },
-
-//{ PSF(origin[1]), 0 },
-{ "origin[1]",PSF1(origin), 0 },
-
-{ "bobCycle",PSF(bobCycle), 8 },
-
-//{ PSF(velocity[0]), 0 },
-{ "velocity[0]",PSF(velocity), 0 },
-
-//{ PSF(velocity[1]), 0 },
-{ "velocity[1]",PSF1(velocity), 0 },
-
-//{ PSF(viewangles[1]), 0 },
-{ "viewangles[1]",PSF1(viewangles), 0 },
-
-//{ PSF(viewangles[0]), 0 },
-{ "viewangles[0]",PSF(viewangles), 0 },
-
-{ "weaponTime",PSF(weaponTime), -16 },
-
-//{ PSF(origin[2]), 0 },
-{ "origin[2]",PSF2(origin), 0 },
-
-//{ PSF(velocity[2]), 0 },
-{ "velocity[2]",PSF2(velocity), 0 },
-
-{ "legsTimer",PSF(legsTimer), 8 },
-{ "pm_time",PSF(pm_time), -16 },
-{ "eventSequence",PSF(eventSequence), 16 },
-{ "torsoAnim",PSF(torsoAnim), 8 },
-{ "movementDir",PSF(movementDir), 4 },
-
-//{ PSF(events[0]), 8 },
-{ "events[0]",PSF(events), 8 },
-
-{ "legsAnim",PSF(legsAnim), 8 },
-
-//{ PSF(events[1]), 8 },
-{ "events[1]",PSF1(events), 8 },
-
-{ "pm_flags",PSF(pm_flags), 16 },
-{ "groundEntityNum",PSF(groundEntityNum), GENTITYNUM_BITS },
-{ "weaponstate",PSF(weaponstate), 4 },
-{ "eFlags",PSF(eFlags), 16 },
-{ "externalEvent",PSF(externalEvent), 10 },
-{ "gravity",PSF(gravity), 16 },
-{ "speed",PSF(speed), 16 },
-
-//{ PSF(delta_angles[1]), 16 },
-{ "delta_angles[1]",PSF1(delta_angles), 16 },
-
-{ "externalEventParm",PSF(externalEventParm), 8 },
-{ "viewheight",PSF(viewheight), -8 },
-{ "damageEvent",PSF(damageEvent), 8 },
-{ "damageYaw",PSF(damageYaw), 8 },
-{ "damagePitch",PSF(damagePitch), 8 },
-{ "damageCount",PSF(damageCount), 8 },
-{ "generic1",PSF(generic1), 8 },
-{ "pm_type",PSF(pm_type), 8 },
-					
-//{ PSF(delta_angles[0]), 16 },
-{ "delta_angles[0]",PSF(delta_angles), 16 },
-
-//{ PSF(delta_angles[2]), 16 },
-{ "delta_angles[2]",PSF2(delta_angles), 16 },
-
-{ "torsoTimer",PSF(torsoTimer), 12 },
-
-//{ PSF(eventParms[0]), 8 },
-{ "eventParms[0]",PSF(eventParms), 8 },
-
-//{ PSF(eventParms[1]), 8 },
-{ "eventParms[1]",PSF1(eventParms), 8 },
-
-{ "clientNum",PSF(clientNum), 8 },
-{ "weapon",PSF(weapon), 5 },
-
-//{ PSF(viewangles[2]), 0 },
-{ "viewangles[2]",PSF2(viewangles), 0 },
-
-//{ PSF(grapplePoint[0]), 0 },
-{ "grapplePoint[0]",PSF(grapplePoint), 0 },
-
-//{ PSF(grapplePoint[1]), 0 },
-{ "grapplePoint[1]",PSF1(grapplePoint), 0 },
-
-//{ PSF(grapplePoint[2]), 0 },
-{ "grapplePoint[2]",PSF2(grapplePoint), 0 },
-
-{ "jumppad_ent",PSF(jumppad_ent), 10 },
-{ "loopSound",PSF(loopSound), 16 }
+{ "commandTime",0 , 32 },
+{ "origin[0]",20 , 0 },
+{ "origin[1]",24, 0 },
+{ "bobCycle",8 , 8 },
+{ "velocity[0]",32, 0 },
+{ "velocity[1]",36, 0 },
+{ "viewangles[1]",156 , 0 },
+{ "viewangles[0]",152 , 0 },
+{ "weaponTime",44 , -16 },
+{ "origin[2]",28 , 0 },
+{ "velocity[2]",40 , 0 },
+{ "legsTimer",72 , 8 },
+{ "pm_time",16 , -16 },
+{ "eventSequence",108 , 16 },
+{ "torsoAnim",84, 8 },
+{ "movementDir",88 , 4 },
+{ "events[0]",112 , 8 },
+{ "legsAnim",76 , 8 },
+{ "events[1]",116 , 8 },
+{ "pm_flags",12 , 16 },
+{ "groundEntityNum",68 , GENTITYNUM_BITS },
+{ "weaponstate",148 , 4 },
+{ "eFlags",104 , 16 },
+{ "externalEvent",128 , 10 },
+{ "gravity",48 , 16 },
+{ "speed",52 , 16 },
+{ "delta_angles[1]",60 , 16 },
+{ "externalEventParm",132 , 8 },
+{ "viewheight",164 , -8 },
+{ "damageEvent",168 , 8 },
+{ "damageYaw",172 , 8 },
+{ "damagePitch",176 , 8 },
+{ "damageCount",180 , 8 },
+{ "generic1",440 , 8 },
+{ "pm_type",4 , 8 },
+{ "delta_angles[0]",56 , 16 },
+{ "delta_angles[2]",64, 16 },
+{ "torsoTimer",80, 12 },
+{ "eventParms[0]",120 , 8 },
+{ "eventParms[1]",124 , 8 },
+{ "clientNum",140 , 8 },
+{ "weapon",144, 5 },
+{ "viewangles[2]",160 , 0 },
+{ "grapplePoint[0]",92 , 0 },
+{ "grapplePoint[1]",96 , 0 },
+{ "grapplePoint[2]",100 , 0 },
+{ "jumppad_ent",448 , GENTITYNUM_BITS }, // was 10 - Cowcat
+{ "loopSound",444 , 16 }
 };
 
 #else

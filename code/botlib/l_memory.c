@@ -101,9 +101,9 @@ void *GetMemory(unsigned long size)
 	void *ptr;
 	memoryblock_t *block;
 
-#ifdef __amigaos4__
+#ifdef AMIGA //__amigaos4__ // Cowcat
 	// Align the memory sizes to multiples of 8 bytes
-	//size = (size + 7) & ~7;
+	//size = (size + 7) & ~7; // never enable this !! - Cowcat
 #endif
 
 	assert(botimport.GetMemory);

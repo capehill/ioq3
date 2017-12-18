@@ -1515,7 +1515,7 @@ void CL_Connect_f( void ) {
 	{
 		if(!strcmp(Cmd_Argv(1), "-4"))
 			family = NA_IP;
-#ifndef __amigaos4__
+#ifndef AMIGA //__amigaos4__
 		else if(!strcmp(Cmd_Argv(1), "-6"))
 			family = NA_IP6;
 #endif
@@ -2129,6 +2129,8 @@ to the server, the server will send out of band disconnect packets
 to the client so it doesn't have to wait for the full timeout period.
 ===================
 */
+
+#if 1 // - Cowcat
 void CL_DisconnectPacket( netadr_t from ) {
 	if ( cls.state < CA_AUTHORIZING ) {
 		return;
@@ -2150,7 +2152,7 @@ void CL_DisconnectPacket( netadr_t from ) {
 	Cvar_Set("com_errorMessage", "Server disconnected for unknown reason\n" );
 	CL_Disconnect( qtrue );
 }
-
+#endif 
 
 /*
 ===================
@@ -2251,7 +2253,7 @@ void CL_ServersResponsePacket( const netadr_t* from, msg_t *msg, qboolean extend
 
 			addresses[numservers].type = NA_IP;
 		}
-#ifndef __amigaos4__
+#ifndef AMIGA //__amigaos4__
 		// IPv6 address, if it's an extended response
 		else if (extended && *buffptr == '/')
 		{
@@ -3378,7 +3380,7 @@ void CL_ServerInfoPacket( netadr_t from, msg_t *msg ) {
 				case NA_IP:
 					type = 1;
 					break;
-#ifndef __amigaos4__
+#ifndef AMIGA //__amigaos4__
 				case NA_IP6:
 					type = 2;
 					break;
@@ -3669,7 +3671,7 @@ void CL_LocalServers_f( void ) {
 
 			to.type = NA_BROADCAST;
 			NET_SendPacket( NS_CLIENT, strlen( message ), message, to );
-#ifndef __amigaos4__
+#ifndef AMIGA //__amigaos4__
 			to.type = NA_MULTICAST6;
 			NET_SendPacket( NS_CLIENT, strlen( message ), message, to );
 #endif
@@ -3721,7 +3723,7 @@ void CL_GlobalServers_f( void ) {
 	cls.numglobalservers = -1;
 	cls.pingUpdateSource = AS_GLOBAL;
 
-#ifndef __amigaos4__
+#ifndef AMIGA //__amigaos4__
 	// Use the extended query for IPv6 masters
 	if (to.type == NA_IP6 || to.type == NA_MULTICAST6)
 	{
@@ -3939,7 +3941,7 @@ void CL_Ping_f( void ) {
 	{
 		if(!strcmp(Cmd_Argv(1), "-4"))
 			family = NA_IP;
-#ifndef __amigaos4__
+#ifndef AMIGA //__amigaos4__
 		else if(!strcmp(Cmd_Argv(1), "-6"))
 			family = NA_IP6;
 #endif
@@ -4107,7 +4109,7 @@ void CL_ServerStatus_f(void) {
 		{
 			if(!strcmp(Cmd_Argv(1), "-4"))
 				family = NA_IP;
-#ifndef __amigaos4__
+#ifndef AMIGA //__amigaos4__
 			else if(!strcmp(Cmd_Argv(1), "-6"))
 				family = NA_IP6;
 #endif

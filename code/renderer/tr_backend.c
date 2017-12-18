@@ -112,7 +112,8 @@ void GL_BindMultitexture( image_t *image0, GLuint env0, image_t *image1, GLuint 
 	texnum1 = image1->texnum;
 
 	if ( r_nobind->integer && tr.dlightImage )
-	{	// performance evaluation option
+	{
+		// performance evaluation option
 		texnum0 = texnum1 = tr.dlightImage->texnum;
 	}
 
@@ -194,7 +195,6 @@ void GL_TexEnv( int env )
 	}
 
 	glState.texEnv[glState.currenttmu] = env;
-
 
 	switch ( env )
 	{
@@ -509,12 +509,13 @@ void RB_BeginDrawingView (void)
 
 	// ensures that depth writes are enabled for the depth clear
 	GL_State( GLS_DEFAULT );
+
 	// clear relevant buffers
 	clearBits = GL_DEPTH_BUFFER_BIT;
 
 	if ( r_measureOverdraw->integer || r_shadows->integer == 2 )
 	{
-		//clearBits |= GL_STENCIL_BUFFER_BIT;
+		//clearBits |= GL_STENCIL_BUFFER_BIT; // Cowcat
 	}
 
 	if ( r_fastsky->integer && !( backEnd.refdef.rdflags & RDF_NOWORLDMODEL ) )
@@ -526,6 +527,7 @@ void RB_BeginDrawingView (void)
 		qglClearColor( 0.0f, 0.0f, 0.0f, 1.0f );	// FIXME: get color of sky
 #endif
 	}
+
 	qglClear( clearBits );
 
 	if ( ( backEnd.refdef.rdflags & RDF_HYPERSPACE ) )
@@ -544,6 +546,7 @@ void RB_BeginDrawingView (void)
 	// we will only draw a sun if there was sky rendered in this view
 	backEnd.skyRenderedThisView = qfalse;
 
+	// Cowcat - don´t disable needed Matrix below.
 	// clip to the plane of the portal
 	if ( backEnd.viewParms.isPortal )
 	{
@@ -561,18 +564,17 @@ void RB_BeginDrawingView (void)
 		plane2[3] = DotProduct (plane, backEnd.viewParms.or.origin) - plane[3];
 
 		qglLoadMatrixf( s_flipMatrix );
-		//qglClipPlane (GL_CLIP_PLANE0, plane2);
-		//qglEnable (GL_CLIP_PLANE0);
+		//qglClipPlane (GL_CLIP_PLANE0, plane2); // Cowcat
+		//qglEnable (GL_CLIP_PLANE0); // Cowcat
 	}
 
 	else
 	{
-		//qglDisable (GL_CLIP_PLANE0);
+		//qglDisable (GL_CLIP_PLANE0); // Cowcat
 	}
+
 }
 
-
-#define	MAC_EVENT_PUMP_MSEC		5
 
 /*
 ==================
@@ -610,7 +612,6 @@ void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs )
 
 	backEnd.pc.c_surfaces += numDrawSurfs;
 
-//Com_Printf("dsl1\n");
 	for (i = 0, drawSurf = drawSurfs ; i < numDrawSurfs ; i++, drawSurf++)
 	{
 		if ( drawSurf->sort == oldSort )
@@ -652,6 +653,7 @@ void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs )
 			{
 				backEnd.currentEntity = &backEnd.refdef.entities[entityNum];
 				backEnd.refdef.floatTime = originalTime - backEnd.currentEntity->e.shaderTime;
+
 				// we have to reset the shaderTime as well otherwise image animations start
 				// from the wrong frame
 				tess.shaderTime = backEnd.refdef.floatTime - tess.shader->timeOffset;
@@ -680,6 +682,7 @@ void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs )
 				backEnd.currentEntity = &tr.worldEntity;
 				backEnd.refdef.floatTime = originalTime;
 				backEnd.or = backEnd.viewParms.world;
+
 				// we have to reset the shaderTime as well otherwise image animations on
 				// the world (like water) continue with the wrong frame
 				tess.shaderTime = backEnd.refdef.floatTime - tess.shader->timeOffset;
@@ -747,7 +750,6 @@ void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs )
 		// add the triangles for this surface
 		rb_surfaceTable[ *drawSurf->surface ]( drawSurf->surface );
 	}
-//Com_Printf("dsl2\n");
 
 	backEnd.refdef.floatTime = originalTime;
 
@@ -757,8 +759,6 @@ void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs )
 		RB_EndSurface();
 	}
 
-//Com_Printf("dsl3\n");
-
 	// go back to the world modelview matrix
 	qglLoadMatrixf( backEnd.viewParms.world.modelMatrix );
 
@@ -767,19 +767,17 @@ void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs )
 		qglDepthRange (0, 1);
 	}
 
-//Com_Printf("dsl4\n");
-
-#if 0
-	RB_DrawSun();
+#if 1 // added - Cowcat
+	if ( r_drawSun->integer )
+	{
+		RB_DrawSun(0.1, tr.sunShader);
+	}
 #endif
 	// darken down any stencil shadows
 	RB_ShadowFinish();		
-//Com_Printf("dsl5\n");
 
 	// add light flares on lights that aren't obscured
 	RB_RenderFlares();
-//Com_Printf("dsl6\n");
-
 }
 
 
@@ -812,7 +810,9 @@ void RB_SetGL2D (void)
 
 	GL_State( GLS_DEPTHTEST_DISABLE | GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA );
 
-	qglDisable( GL_CULL_FACE );
+	//qglDisable( GL_CULL_FACE );
+	GL_Cull(CT_TWO_SIDED); // Cowcat
+
 	//qglDisable( GL_CLIP_PLANE0 ); // Cowcat
 
 	// set time for 2D shaders
@@ -839,6 +839,9 @@ void RE_StretchRaw (int x, int y, int w, int h, int cols, int rows, const byte *
 	{
 		return;
 	}
+
+	if(tess.numIndexes)
+		RB_EndSurface(); // new ioq3 - Cowcat
 
 	R_SyncRenderThread();
 
@@ -874,8 +877,8 @@ void RE_StretchRaw (int x, int y, int w, int h, int cols, int rows, const byte *
 		qglTexImage2D( GL_TEXTURE_2D, 0, GL_RGB8, cols, rows, 0, GL_RGBA, GL_UNSIGNED_BYTE, data );
 		qglTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
 		qglTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
-		qglTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP /*_TO_EDGE*/ );
-		qglTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP /*_TO_EDGE*/ );	
+		qglTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP /*_TO_EDGE*/ ); // Cowcat
+		qglTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP /*_TO_EDGE*/ ); // Cowcat
 	}
 
 	else
@@ -990,6 +993,7 @@ const void *RB_StretchPic ( const void *data )
 	}
 
 	RB_CHECKOVERFLOW( 4, 6 );
+
 	numVerts = tess.numVertexes;
 	numIndexes = tess.numIndexes;
 
@@ -1050,15 +1054,11 @@ const void *RB_DrawSurfs( const void *data )
 {
 	const drawSurfsCommand_t	*cmd;
 
-//Com_Printf("ds_1\n");
-
 	// finish any 2D drawing if needed
 	if ( tess.numIndexes )
 	{
 		RB_EndSurface();
 	}
-
-//Com_Printf("ds_2\n");
 
 	cmd = (const drawSurfsCommand_t *)data;
 
@@ -1066,8 +1066,6 @@ const void *RB_DrawSurfs( const void *data )
 	backEnd.viewParms = cmd->viewParms;
 
 	RB_RenderDrawSurfList( cmd->drawSurfs, cmd->numDrawSurfs );
-
-//Com_Printf("ds_3\n");
 
 	return (const void *)(cmd + 1);
 }
@@ -1142,6 +1140,7 @@ void RB_ShowImages( void )
 		}
 
 		GL_Bind( image );
+
 		qglBegin (GL_QUADS);
 		qglTexCoord2f( 0, 0 );
 		qglVertex2f( x, y );

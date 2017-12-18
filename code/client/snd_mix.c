@@ -768,6 +768,11 @@ void S_PaintChannels( int endtime )
 			ltime = s_paintedtime;
 			sc = ch->thesfx;
 
+			if (sc->soundData==NULL || sc->soundLength==0) // fix - Cowcat
+			{
+				continue;
+			}
+
 			sampleOffset = ltime - ch->startSample;
 			count = end - ltime;
 
