@@ -35,6 +35,9 @@ endif
 ifndef BUILD_RENDERER_OPENGL2
   BUILD_RENDERER_OPENGL2=
 endif
+ifndef BUILD_AUTOUPDATER  # DON'T build unless you mean to!
+  BUILD_AUTOUPDATER=0
+endif
 
 #############################################################################
 #
@@ -173,7 +176,7 @@ ifndef USE_CURL_DLOPEN
 endif
 
 ifndef USE_CODEC_VORBIS
-USE_CODEC_VORBIS=0
+USE_CODEC_VORBIS=1
 endif
 
 ifndef USE_CODEC_OPUS
@@ -228,6 +231,10 @@ ifndef USE_YACC
 USE_YACC=0
 endif
 
+ifndef USE_AUTOUPDATER  # DON'T include unless you mean to!
+USE_AUTOUPDATER=0
+endif
+
 ifndef DEBUG_CFLAGS
 DEBUG_CFLAGS=-ggdb -O0
 endif
@@ -264,6 +271,9 @@ LBURGDIR=$(MOUNT_DIR)/tools/lcc/lburg
 Q3CPPDIR=$(MOUNT_DIR)/tools/lcc/cpp
 Q3LCCETCDIR=$(MOUNT_DIR)/tools/lcc/etc
 Q3LCCSRCDIR=$(MOUNT_DIR)/tools/lcc/src
+AUTOUPDATERSRCDIR=$(MOUNT_DIR)/autoupdater
+LIBTOMCRYPTSRCDIR=$(AUTOUPDATERSRCDIR)/rsa_tools/libtomcrypt-1.17
+TOMSFASTMATHSRCDIR=$(AUTOUPDATERSRCDIR)/rsa_tools/tomsfastmath-0.13.1
 LOKISETUPDIR=misc/setup
 NSISDIR=misc/nsis
 SDLHDIR=$(MOUNT_DIR)/SDL2
@@ -271,29 +281,30 @@ LIBSDIR=$(MOUNT_DIR)/libs
 
 bin_path=$(shell which $(1) 2> /dev/null)
 
+# The autoupdater uses curl, so figure out its flags no matter what.
 # We won't need this if we only build the server
-ifneq ($(BUILD_CLIENT),0)
-  # set PKG_CONFIG_PATH to influence this, e.g.
-  # PKG_CONFIG_PATH=/opt/cross/i386-mingw32msvc/lib/pkgconfig
-  ifneq ($(call bin_path, pkg-config),)
-    CURL_CFLAGS ?= $(shell pkg-config --silence-errors --cflags libcurl)
-    CURL_LIBS ?= $(shell pkg-config --silence-errors --libs libcurl)
-    OPENAL_CFLAGS ?= $(shell pkg-config --silence-errors --cflags openal)
-    OPENAL_LIBS ?= $(shell pkg-config --silence-errors --libs openal)
-    SDL_CFLAGS ?= $(shell pkg-config --silence-errors --cflags sdl2|sed 's/-Dmain=SDL_main//')
-    SDL_LIBS ?= $(shell pkg-config --silence-errors --libs sdl2)
-    FREETYPE_CFLAGS ?= $(shell pkg-config --silence-errors --cflags freetype2)
-  else
-    # assume they're in the system default paths (no -I or -L needed)
-    CURL_LIBS ?= -lcurl
-    OPENAL_LIBS ?= -lopenal
-  endif
-  # Use sdl2-config if all else fails
-  ifeq ($(SDL_CFLAGS),)
-    ifneq ($(call bin_path, sdl2-config),)
-      SDL_CFLAGS ?= $(shell sdl2-config --cflags)
-      SDL_LIBS ?= $(shell sdl2-config --libs)
-    endif
+
+# set PKG_CONFIG_PATH to influence this, e.g.
+# PKG_CONFIG_PATH=/opt/cross/i386-mingw32msvc/lib/pkgconfig
+ifneq ($(call bin_path, pkg-config),)
+  CURL_CFLAGS ?= $(shell pkg-config --silence-errors --cflags libcurl)
+  CURL_LIBS ?= $(shell pkg-config --silence-errors --libs libcurl)
+  OPENAL_CFLAGS ?= $(shell pkg-config --silence-errors --cflags openal)
+  OPENAL_LIBS ?= $(shell pkg-config --silence-errors --libs openal)
+  SDL_CFLAGS ?= $(shell pkg-config --silence-errors --cflags sdl2|sed 's/-Dmain=SDL_main//')
+  SDL_LIBS ?= $(shell pkg-config --silence-errors --libs sdl2)
+  FREETYPE_CFLAGS ?= $(shell pkg-config --silence-errors --cflags freetype2)
+else
+  # assume they're in the system default paths (no -I or -L needed)
+  CURL_LIBS ?= -lcurl
+  OPENAL_LIBS ?= -lopenal
+endif
+
+# Use sdl2-config if all else fails
+ifeq ($(SDL_CFLAGS),)
+  ifneq ($(call bin_path, sdl2-config),)
+    SDL_CFLAGS = $(shell sdl2-config --cflags)
+    SDL_LIBS = $(shell sdl2-config --libs)
   endif
 endif
 
@@ -314,7 +325,7 @@ endif
 #############################################################################
 
 INSTALL=install
-MKDIR=mkdir
+MKDIR=mkdir -p
 EXTRA_FILES=
 CLIENT_EXTRA_FILES=
 
@@ -370,9 +381,10 @@ ifneq (,$(findstring "$(PLATFORM)", "linux" "gnu_kfreebsd" "kfreebsd-gnu" "gnu")
 
   THREAD_LIBS=-lpthread
   LIBS=-ldl -lm
+  AUTOUPDATER_LIBS += -ldl
 
   CLIENT_LIBS=$(SDL_LIBS)
-  RENDERER_LIBS = $(SDL_LIBS) -lGL
+  RENDERER_LIBS = $(SDL_LIBS)
 
   ifeq ($(USE_OPENAL),1)
     ifneq ($(USE_OPENAL_DLOPEN),1)
@@ -410,13 +422,29 @@ ifeq ($(PLATFORM),darwin)
   LIBS = -framework Cocoa
   CLIENT_LIBS=
   RENDERER_LIBS=
-  OPTIMIZEVM=
+  OPTIMIZEVM = -O3
 
-  BASE_CFLAGS += -mmacosx-version-min=10.7 -DMAC_OS_X_VERSION_MIN_REQUIRED=1070
+  # Default minimum Mac OS X version
+  ifeq ($(MACOSX_VERSION_MIN),)
+    MACOSX_VERSION_MIN=10.7
+  endif
+
+  MACOSX_MAJOR=$(shell echo $(MACOSX_VERSION_MIN) | cut -d. -f1)
+  MACOSX_MINOR=$(shell echo $(MACOSX_VERSION_MIN) | cut -d. -f2)
+  ifeq ($(shell test $(MACOSX_MINOR) -gt 9; echo $$?),0)
+    # Multiply and then remove decimal. 10.10 -> 101000.0 -> 101000
+    MAC_OS_X_VERSION_MIN_REQUIRED=$(shell echo "$(MACOSX_MAJOR) * 10000 + $(MACOSX_MINOR) * 100" | bc | cut -d. -f1)
+  else
+    # Multiply by 100 and then remove decimal. 10.7 -> 1070.0 -> 1070
+    MAC_OS_X_VERSION_MIN_REQUIRED=$(shell echo "$(MACOSX_VERSION_MIN) * 100" | bc | cut -d. -f1)
+  endif
+
+  LDFLAGS += -mmacosx-version-min=$(MACOSX_VERSION_MIN)
+  BASE_CFLAGS += -mmacosx-version-min=$(MACOSX_VERSION_MIN) \
+                 -DMAC_OS_X_VERSION_MIN_REQUIRED=$(MAC_OS_X_VERSION_MIN_REQUIRED)
 
   ifeq ($(ARCH),ppc)
     BASE_CFLAGS += -arch ppc -faltivec
-    OPTIMIZEVM += -O3
   endif
   ifeq ($(ARCH),ppc64)
     BASE_CFLAGS += -arch ppc64 -faltivec
@@ -428,7 +456,8 @@ ifeq ($(PLATFORM),darwin)
     BASE_CFLAGS += -arch i386 -m32 -mstackrealign
   endif
   ifeq ($(ARCH),x86_64)
-    OPTIMIZEVM += -arch x86_64 -mfpmath=sse
+    OPTIMIZEVM += -mfpmath=sse
+    BASE_CFLAGS += -arch x86_64
   endif
 
   # When compiling on OSX for OSX, we're not cross compiling as far as the
@@ -586,12 +615,14 @@ ifdef MINGW
   endif
 
   LIBS= -lws2_32 -lwinmm -lpsapi
+  AUTOUPDATER_LIBS += -lwininet
+
   # clang 3.4 doesn't support this
   ifneq ("$(CC)", $(findstring "$(CC)", "clang" "clang++"))
     CLIENT_LDFLAGS += -mwindows
   endif
   CLIENT_LIBS = -lgdi32 -lole32
-  RENDERER_LIBS = -lgdi32 -lole32 -lopengl32
+  RENDERER_LIBS = -lgdi32 -lole32 -static-libgcc
 
   ifeq ($(USE_FREETYPE),1)
     FREETYPE_CFLAGS = -Ifreetype2
@@ -603,9 +634,9 @@ ifdef MINGW
       ifeq ($(USE_LOCAL_HEADERS),1)
         CLIENT_CFLAGS += -DCURL_STATICLIB
         ifeq ($(ARCH),x86_64)
-          CLIENT_LIBS += $(LIBSDIR)/win64/libcurl.a
+          CLIENT_LIBS += $(LIBSDIR)/win64/libcurl.a -lcrypt32
         else
-          CLIENT_LIBS += $(LIBSDIR)/win32/libcurl.a
+          CLIENT_LIBS += $(LIBSDIR)/win32/libcurl.a -lcrypt32
         endif
       else
         CLIENT_LIBS += $(CURL_LIBS)
@@ -677,7 +708,7 @@ ifeq ($(PLATFORM),freebsd)
   CLIENT_LIBS =
 
   CLIENT_LIBS += $(SDL_LIBS)
-  RENDERER_LIBS = $(SDL_LIBS) -lGL
+  RENDERER_LIBS = $(SDL_LIBS)
 
   # optional features/libraries
   ifeq ($(USE_OPENAL),1)
@@ -768,7 +799,7 @@ ifeq ($(PLATFORM),openbsd)
   CLIENT_LIBS =
 
   CLIENT_LIBS += $(SDL_LIBS)
-  RENDERER_LIBS = $(SDL_LIBS) -lGL
+  RENDERER_LIBS = $(SDL_LIBS)
 
   ifeq ($(USE_OPENAL),1)
     ifneq ($(USE_OPENAL_DLOPEN),1)
@@ -814,7 +845,6 @@ ifeq ($(PLATFORM),irix64)
   ARCH=mips
 
   CC = c99
-  MKDIR = mkdir -p
 
   BASE_CFLAGS=-Dstricmp=strcasecmp -Xcpluscomm -woff 1185 \
     -I. -I$(ROOT)/usr/include
@@ -826,10 +856,12 @@ ifeq ($(PLATFORM),irix64)
   SHLIBLDFLAGS=-shared
 
   LIBS=-ldl -lm -lgen
+  AUTOUPDATER_LIBS += -ldl
+
   # FIXME: The X libraries probably aren't necessary?
   CLIENT_LIBS=-L/usr/X11/$(LIB) $(SDL_LIBS) \
     -lX11 -lXext -lm
-  RENDERER_LIBS = $(SDL_LIBS) -lGL
+  RENDERER_LIBS = $(SDL_LIBS)
 
 else # ifeq IRIX
 
@@ -841,7 +873,7 @@ ifeq ($(PLATFORM),sunos)
 
   CC=gcc
   INSTALL=ginstall
-  MKDIR=gmkdir
+  MKDIR=gmkdir -p
   COPYDIR="/usr/local/share/games/quake3"
 
   ifneq ($(ARCH),x86)
@@ -880,11 +912,12 @@ ifeq ($(PLATFORM),sunos)
 
   THREAD_LIBS=-lpthread
   LIBS=-lsocket -lnsl -ldl -lm
+  AUTOUPDATER_LIBS += -ldl
 
   BOTCFLAGS=-O0
 
   CLIENT_LIBS +=$(SDL_LIBS) -lX11 -lXext -liconv -lm
-  RENDERER_LIBS = $(SDL_LIBS) -lGL
+  RENDERER_LIBS = $(SDL_LIBS)
 
 else # ifeq sunos
 
@@ -1008,6 +1041,16 @@ ifneq ($(BUILD_GAME_QVM),0)
   endif
 endif
 
+ifneq ($(BUILD_AUTOUPDATER),0)
+  # PLEASE NOTE that if you run an exe on Windows Vista or later
+  #  with "setup", "install", "update" or other related terms, it
+  #  will unconditionally trigger a UAC prompt, and in the case of
+  #  ioq3 calling CreateProcess() on it, it'll just fail immediately.
+  #  So don't call this thing "autoupdater" here!
+  AUTOUPDATER_BIN := autosyncerator$(FULLBINEXT)
+  TARGETS += $(B)/$(AUTOUPDATER_BIN)
+endif
+
 ifeq ($(USE_OPENAL),1)
   CLIENT_CFLAGS += -DUSE_OPENAL
   ifeq ($(USE_OPENAL_DLOPEN),1)
@@ -1108,6 +1151,15 @@ ifeq ($(USE_FREETYPE),1)
   RENDERER_LIBS += $(FREETYPE_LIBS)
 endif
 
+ifeq ($(USE_AUTOUPDATER),1)
+  CLIENT_CFLAGS += -DUSE_AUTOUPDATER -DAUTOUPDATER_BIN=\\\"$(AUTOUPDATER_BIN)\\\"
+  SERVER_CFLAGS += -DUSE_AUTOUPDATER -DAUTOUPDATER_BIN=\\\"$(AUTOUPDATER_BIN)\\\"
+endif
+
+ifeq ($(BUILD_AUTOUPDATER),1)
+  AUTOUPDATER_LIBS += $(LIBTOMCRYPTSRCDIR)/libtomcrypt.a $(TOMSFASTMATHSRCDIR)/libtfm.a
+endif
+
 ifeq ("$(CC)", $(findstring "$(CC)", "clang" "clang++"))
   BASE_CFLAGS += -Qunused-arguments
 endif
@@ -1169,7 +1221,7 @@ define DO_REF_STR
 $(echo_cmd) "REF_STR $<"
 $(Q)rm -f $@
 $(Q)echo "const char *fallbackShader_$(notdir $(basename $<)) =" >> $@
-$(Q)cat $< | sed 's/^/\"/;s/$$/\\n\"/' >> $@
+$(Q)cat $< | sed -e 's/^/\"/;s/$$/\\n\"/' | tr -d '\r' >> $@
 $(Q)echo ";" >> $@
 endef
 
@@ -1343,6 +1395,9 @@ endif
 	@echo "  CLIENT_LIBS:"
 	$(call print_wrapped, $(CLIENT_LIBS))
 	@echo ""
+	@echo "  AUTOUPDATER_LIBS:"
+	$(call print_wrapped, $(AUTOUPDATER_LIBS))
+	@echo ""
 	@echo "  Output:"
 	$(call print_list, $(NAKED_TARGETS))
 	@echo ""
@@ -1366,33 +1421,28 @@ ifneq ($(PLATFORM),darwin)
 endif
 
 makedirs:
-	@if [ ! -d $(BUILD_DIR) ];then $(MKDIR) $(BUILD_DIR);fi
-	@if [ ! -d $(B) ];then $(MKDIR) $(B);fi
-	@if [ ! -d $(B)/client ];then $(MKDIR) $(B)/client;fi
-	@if [ ! -d $(B)/client/opus ];then $(MKDIR) $(B)/client/opus;fi
-	@if [ ! -d $(B)/client/vorbis ];then $(MKDIR) $(B)/client/vorbis;fi
-	@if [ ! -d $(B)/renderergl1 ];then $(MKDIR) $(B)/renderergl1;fi
-	@if [ ! -d $(B)/renderergl2 ];then $(MKDIR) $(B)/renderergl2;fi
-	@if [ ! -d $(B)/renderergl2/glsl ];then $(MKDIR) $(B)/renderergl2/glsl;fi
-	@if [ ! -d $(B)/ded ];then $(MKDIR) $(B)/ded;fi
-	@if [ ! -d $(B)/$(BASEGAME) ];then $(MKDIR) $(B)/$(BASEGAME);fi
-	@if [ ! -d $(B)/$(BASEGAME)/cgame ];then $(MKDIR) $(B)/$(BASEGAME)/cgame;fi
-	@if [ ! -d $(B)/$(BASEGAME)/game ];then $(MKDIR) $(B)/$(BASEGAME)/game;fi
-	@if [ ! -d $(B)/$(BASEGAME)/ui ];then $(MKDIR) $(B)/$(BASEGAME)/ui;fi
-	@if [ ! -d $(B)/$(BASEGAME)/qcommon ];then $(MKDIR) $(B)/$(BASEGAME)/qcommon;fi
-	@if [ ! -d $(B)/$(BASEGAME)/vm ];then $(MKDIR) $(B)/$(BASEGAME)/vm;fi
-	@if [ ! -d $(B)/$(MISSIONPACK) ];then $(MKDIR) $(B)/$(MISSIONPACK);fi
-	@if [ ! -d $(B)/$(MISSIONPACK)/cgame ];then $(MKDIR) $(B)/$(MISSIONPACK)/cgame;fi
-	@if [ ! -d $(B)/$(MISSIONPACK)/game ];then $(MKDIR) $(B)/$(MISSIONPACK)/game;fi
-	@if [ ! -d $(B)/$(MISSIONPACK)/ui ];then $(MKDIR) $(B)/$(MISSIONPACK)/ui;fi
-	@if [ ! -d $(B)/$(MISSIONPACK)/qcommon ];then $(MKDIR) $(B)/$(MISSIONPACK)/qcommon;fi
-	@if [ ! -d $(B)/$(MISSIONPACK)/vm ];then $(MKDIR) $(B)/$(MISSIONPACK)/vm;fi
-	@if [ ! -d $(B)/tools ];then $(MKDIR) $(B)/tools;fi
-	@if [ ! -d $(B)/tools/asm ];then $(MKDIR) $(B)/tools/asm;fi
-	@if [ ! -d $(B)/tools/etc ];then $(MKDIR) $(B)/tools/etc;fi
-	@if [ ! -d $(B)/tools/rcc ];then $(MKDIR) $(B)/tools/rcc;fi
-	@if [ ! -d $(B)/tools/cpp ];then $(MKDIR) $(B)/tools/cpp;fi
-	@if [ ! -d $(B)/tools/lburg ];then $(MKDIR) $(B)/tools/lburg;fi
+	@$(MKDIR) $(B)/autoupdater
+	@$(MKDIR) $(B)/client/opus
+	@$(MKDIR) $(B)/client/vorbis
+	@$(MKDIR) $(B)/renderergl1
+	@$(MKDIR) $(B)/renderergl2
+	@$(MKDIR) $(B)/renderergl2/glsl
+	@$(MKDIR) $(B)/ded
+	@$(MKDIR) $(B)/$(BASEGAME)/cgame
+	@$(MKDIR) $(B)/$(BASEGAME)/game
+	@$(MKDIR) $(B)/$(BASEGAME)/ui
+	@$(MKDIR) $(B)/$(BASEGAME)/qcommon
+	@$(MKDIR) $(B)/$(BASEGAME)/vm
+	@$(MKDIR) $(B)/$(MISSIONPACK)/cgame
+	@$(MKDIR) $(B)/$(MISSIONPACK)/game
+	@$(MKDIR) $(B)/$(MISSIONPACK)/ui
+	@$(MKDIR) $(B)/$(MISSIONPACK)/qcommon
+	@$(MKDIR) $(B)/$(MISSIONPACK)/vm
+	@$(MKDIR) $(B)/tools/asm
+	@$(MKDIR) $(B)/tools/etc
+	@$(MKDIR) $(B)/tools/rcc
+	@$(MKDIR) $(B)/tools/cpp
+	@$(MKDIR) $(B)/tools/lburg
 
 #############################################################################
 # QVM BUILD TOOLS
@@ -1588,6 +1638,26 @@ $(Q3ASM): $(Q3ASMOBJ)
 
 
 #############################################################################
+# AUTOUPDATER
+#############################################################################
+
+define DO_AUTOUPDATER_CC
+$(echo_cmd) "AUTOUPDATER_CC $<"
+$(Q)$(CC) $(CFLAGS) -I$(LIBTOMCRYPTSRCDIR)/src/headers -I$(TOMSFASTMATHSRCDIR)/src/headers $(CURL_CFLAGS) -o $@ -c $<
+endef
+
+Q3AUTOUPDATEROBJ = \
+  $(B)/autoupdater/autoupdater.o
+
+$(B)/autoupdater/%.o: $(AUTOUPDATERSRCDIR)/%.c
+	$(DO_AUTOUPDATER_CC)
+
+$(B)/$(AUTOUPDATER_BIN): $(Q3AUTOUPDATEROBJ)
+	$(echo_cmd) "AUTOUPDATER_LD $@"
+	$(Q)$(CC) $(LDFLAGS) -o $@ $(Q3AUTOUPDATEROBJ) $(AUTOUPDATER_LIBS)
+
+
+#############################################################################
 # CLIENT/SERVER
 #############################################################################
 
@@ -1690,6 +1760,7 @@ Q3OBJ = \
   $(B)/client/sdl_snd.o \
   \
   $(B)/client/con_log.o \
+  $(B)/client/sys_autoupdater.o \
   $(B)/client/sys_main.o
 
 ifdef MINGW
@@ -2230,6 +2301,7 @@ Q3DOBJ = \
   $(B)/ded/null_snddma.o \
   \
   $(B)/ded/con_log.o \
+  $(B)/ded/sys_autoupdater.o \
   $(B)/ded/sys_main.o
 
 ifeq ($(ARCH),x86)
@@ -2633,7 +2705,7 @@ $(B)/client/%.o: $(SYSDIR)/%.c
 $(B)/client/%.o: $(SYSDIR)/%.m
 	$(DO_CC)
 
-$(B)/client/%.o: $(SYSDIR)/%.rc
+$(B)/client/win_resource.o: $(SYSDIR)/win_resource.rc $(SYSDIR)/win_manifest.xml
 	$(DO_WINDRES)
 
 
@@ -2690,7 +2762,7 @@ $(B)/ded/%.o: $(SYSDIR)/%.c
 $(B)/ded/%.o: $(SYSDIR)/%.m
 	$(DO_DED_CC)
 
-$(B)/ded/%.o: $(SYSDIR)/%.rc
+$(B)/ded/win_resource.o: $(SYSDIR)/win_resource.rc $(SYSDIR)/win_manifest.xml
 	$(DO_WINDRES)
 
 $(B)/ded/%.o: $(NDIR)/%.c
@@ -2799,10 +2871,10 @@ copyfiles: release
 	@if [ ! -d $(COPYDIR)/$(BASEGAME) ]; then echo "You need to set COPYDIR to where your Quake3 data is!"; fi
 ifneq ($(BUILD_GAME_SO),0)
   ifneq ($(BUILD_BASEGAME),0)
-	-$(MKDIR) -p -m 0755 $(COPYDIR)/$(BASEGAME)
+	-$(MKDIR) -m 0755 $(COPYDIR)/$(BASEGAME)
   endif
   ifneq ($(BUILD_MISSIONPACK),0)
-	-$(MKDIR) -p -m 0755 $(COPYDIR)/$(MISSIONPACK)
+	-$(MKDIR) -m 0755 $(COPYDIR)/$(MISSIONPACK)
   endif
 endif
 

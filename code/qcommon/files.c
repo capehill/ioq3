@@ -88,7 +88,7 @@ File search order: when FS_FOpenFileRead gets called it will go through the fs_s
 structure and stop on the first successful hit. fs_searchpaths is built with successive
 calls to FS_AddGameDirectory
 
-Additionaly, we search in several subdirectories:
+Additionally, we search in several subdirectories:
 current game is the current mode
 base game is a variable to allow mods based on other mods
 (such as baseq3 + missionpack content combination in a mod for instance)
@@ -174,6 +174,7 @@ or configs will never get loaded from disk!
 
 // every time a new demo pk3 file is built, this checksum must be updated.
 // the easiest way to get it is to just run the game and see what it spits out
+#ifndef STANDALONE
 #define	DEMO_PAK0_CHECKSUM	2985612116u
 static const unsigned int pak_checksums[] = {
 	1566731103u,
@@ -194,6 +195,7 @@ static const unsigned int missionpak_checksums[] =
 	2662638993u,
 	1438664554u
 };
+#endif
 
 // if this is defined, the executable positively won't work with any paks other
 // than the demo pak, even if productid is present.  This is only used for our
@@ -1418,7 +1420,7 @@ long FS_FOpenFileRead(const char *filename, fileHandle_t *file, qboolean uniqueF
 	}
 	else
 	{
-		// When file is NULL, we're querying the existance of the file
+		// When file is NULL, we're querying the existence of the file
 		// If we've got here, it doesn't exist
 		return 0;
 	}
@@ -2204,7 +2206,7 @@ static int FS_AddFileToList( char *name, char *list[MAX_FOUND_FILES], int nfiles
 	}
 	for ( i = 0 ; i < nfiles ; i++ ) {
 		if ( !Q_stricmp( name, list[i] ) ) {
-			return nfiles;		// allready in list
+			return nfiles;		// already in list
 		}
 	}
 	list[nfiles] = CopyString( name );
@@ -3067,6 +3069,23 @@ qboolean FS_CheckDirTraversal(const char *checkdir)
 
 /*
 ================
+FS_InvalidGameDir
+
+return true if path is a reference to current directory or directory traversal
+or a sub-directory
+================
+*/
+qboolean FS_InvalidGameDir( const char *gamedir ) {
+	if ( !strcmp( gamedir, "." ) || !strcmp( gamedir, ".." )
+		|| strchr( gamedir, '/' ) || strchr( gamedir, '\\' ) ) {
+		return qtrue;
+	}
+
+	return qfalse;
+}
+
+/*
+================
 FS_ComparePaks
 
 ----------------
@@ -3307,6 +3326,27 @@ static void FS_Startup( const char *gameName )
 	fs_homepath = Cvar_Get ("fs_homepath", homePath, CVAR_INIT|CVAR_PROTECTED );
 	fs_gamedirvar = Cvar_Get ("fs_game", "", CVAR_INIT|CVAR_SYSTEMINFO );
 
+	if (!gameName[0]) {
+		Cvar_ForceReset( "com_basegame" );
+	}
+
+	if (!FS_FilenameCompare(fs_gamedirvar->string, gameName)) {
+		// This is the standard base game. Servers and clients should
+		// use "" and not the standard basegame name because this messes
+		// up pak file negotiation and lots of other stuff
+		Cvar_ForceReset( "fs_game" );
+	}
+
+	if (FS_InvalidGameDir(gameName)) {
+		Com_Error( ERR_DROP, "Invalid com_basegame '%s'", gameName );
+	}
+	if (FS_InvalidGameDir(fs_basegame->string)) {
+		Com_Error( ERR_DROP, "Invalid fs_basegame '%s'", fs_basegame->string );
+	}
+	if (FS_InvalidGameDir(fs_gamedirvar->string)) {
+		Com_Error( ERR_DROP, "Invalid fs_game '%s'", fs_gamedirvar->string );
+	}
+
 	// add search path elements in reverse priority order
 	fs_gogpath = Cvar_Get ("fs_gogpath", Sys_GogPath(), CVAR_INIT|CVAR_PROTECTED );
 	if (fs_gogpath->string[0]) {
@@ -3367,14 +3407,10 @@ static void FS_Startup( const char *gameName )
 	}
 
 #ifndef STANDALONE
-	if(!com_standalone->integer)
-	{
-		cvar_t	*fs;
-
+	if (!com_standalone->integer) {
 		Com_ReadCDKey(BASEGAME);
-		fs = Cvar_Get ("fs_game", "", CVAR_INIT|CVAR_SYSTEMINFO );
-		if (fs && fs->string[0] != 0) {
-			Com_AppendCDKey( fs->string );
+		if (fs_gamedirvar->string[0]) {
+			Com_AppendCDKey(fs_gamedirvar->string);
 		}
 	}
 #endif
@@ -3929,7 +3965,7 @@ void FS_PureServerSetReferencedPaks( const char *pakSums, const char *pakNames )
 ================
 FS_InitFilesystem
 
-Called only at inital startup, not when the filesystem
+Called only at initial startup, not when the filesystem
 is resetting due to a game change
 ================
 */

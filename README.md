@@ -11,7 +11,7 @@ The intent of this project is to provide a baseline Quake 3 which may be used
 for further development and baseq3 fun.
 Some of the major features currently implemented are:
 
-  * SDL backend
+  * SDL 2 backend
   * OpenAL sound API support (multiple speaker support and better sound
     quality)
   * Full x86_64 support on Linux
@@ -139,6 +139,12 @@ The defaults for these variables differ depending on the target platform.
   cl_mouseAccelStyle                - Set to 1 for QuakeLive mouse acceleration
                                       behaviour, 0 for standard q3
   cl_mouseAccelOffset               - Tuning the acceleration curve, see below
+
+  con_autochat                      - Set to 0 to disable sending console input
+                                      text as chat when there is not a slash
+                                      at the beginning
+  con_autoclear                     - Set to 0 to disable clearing console
+                                      input text when console is closed
 
   in_joystickUseAnalog              - Do not translate joystick axis events
                                       to keyboard commands
@@ -327,6 +333,8 @@ The defaults for these variables differ depending on the target platform.
 
   cvar_modified [filter]  - list modified cvars, can filter results (such as "r*"
                             for renderer cvars) like cvarlist which lists all cvars
+
+  addbot random           - the bot name "random" now selects a random bot
 ```
 
 

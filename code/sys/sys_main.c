@@ -502,7 +502,7 @@ from executable path, then fs_basepath.
 
 void *Sys_LoadDll(const char *name, qboolean useSystemLib)
 {
-	void *dllhandle;
+	void *dllhandle = NULL;
 
 	if(!Sys_DllExtension(name))
 	{
@@ -511,9 +511,12 @@ void *Sys_LoadDll(const char *name, qboolean useSystemLib)
 	}
 
 	if(useSystemLib)
+	{
 		Com_Printf("Trying to load \"%s\"...\n", name);
+		dllhandle = Sys_LoadLibrary(name);
+	}
 	
-	if(!useSystemLib || !(dllhandle = Sys_LoadLibrary(name)))
+	if(!dllhandle)
 	{
 		const char *topDir;
 		char libPath[MAX_OSPATH];
@@ -687,6 +690,9 @@ int main( int argc, char **argv )
 	int   i;
 	char  commandLine[ MAX_STRING_CHARS ] = { 0 };
 
+	extern void Sys_LaunchAutoupdater(int argc, char **argv);
+	Sys_LaunchAutoupdater(argc, argv);
+
 #ifndef DEDICATED
 	// SDL version check
 
@@ -745,10 +751,9 @@ int main( int argc, char **argv )
 		Q_strcat( commandLine, sizeof( commandLine ), " " );
 	}
 
+	CON_Init( );
 	Com_Init( commandLine );
 	NET_Init( );
-
-	CON_Init( );
 
 	signal( SIGILL, Sys_SigHandler );
 	signal( SIGFPE, Sys_SigHandler );
@@ -758,7 +763,6 @@ int main( int argc, char **argv )
 
 	while( 1 )
 	{
-		IN_Frame( );
 		Com_Frame( );
 	}
 
