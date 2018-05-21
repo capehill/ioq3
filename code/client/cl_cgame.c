@@ -25,7 +25,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "../botlib/botlib.h"
 
+#ifdef USE_MUMBLE
 #include "libmumblelink.h"
+#endif
 
 // Cowcat
 #if defined(AMIGA) && defined(__VBCC__)
@@ -200,10 +202,11 @@ void CL_AddCgameCommand( const char *cmdName ) {
 CL_CgameError
 =====================
 */
+#if 0 // unused - Cowcat
 void CL_CgameError( const char *string ) {
 	Com_Error( ERR_DROP, "%s", string );
 }
-
+#endif
 
 /*
 =====================
@@ -399,18 +402,22 @@ CL_ShutdonwCGame
 
 ====================
 */
-void CL_ShutdownCGame( void ) {
+void CL_ShutdownCGame( void )
+{
 	Key_SetCatcher( Key_GetCatcher( ) & ~KEYCATCH_CGAME );
 	cls.cgameStarted = qfalse;
+
 	if ( !cgvm ) {
 		return;
 	}
+
 	VM_Call( cgvm, CG_SHUTDOWN );
 	VM_Free( cgvm );
 	cgvm = NULL;
 }
 
-static int	FloatAsInt( float f ) {
+static int FloatAsInt( float f )
+{
 	floatint_t fi;
 	fi.f = f;
 	return fi.i;
@@ -423,8 +430,11 @@ CL_CgameSystemCalls
 The cgame module is making a system call
 ====================
 */
-intptr_t CL_CgameSystemCalls( intptr_t *args ) {
-	switch( args[0] ) {
+
+intptr_t CL_CgameSystemCalls( intptr_t *args )
+{
+	switch( args[0] )
+	{
 	case CG_PRINT:
 		Com_Printf( "%s", (const char*)VMA(1) );
 		return 0;
@@ -476,7 +486,7 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		Cmd_RemoveCommand( VMA(1) );
 		return 0;
 	case CG_SENDCLIENTCOMMAND:
-		CL_AddReliableCommand( VMA(1) );
+		CL_AddReliableCommand( VMA(1), qfalse ); // Cowcat
 		return 0;
 	case CG_UPDATESCREEN:
 		// this is used during lengthy level loading, so pump message loop
@@ -557,6 +567,7 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		return re.RegisterShaderNoMip( VMA(1) );
 	case CG_R_REGISTERFONT:
 		re.RegisterFont( VMA(1), args[2], VMA(3));
+		return 0; // fix - Cowcat
 	case CG_R_CLEARSCENE:
 		re.ClearScene();
 		return 0;
@@ -648,7 +659,8 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 	case CG_CEIL:
 		return FloatAsInt( ceil( VMF(1) ) );
 	case CG_ACOS:
-		return FloatAsInt( Q_acos( VMF(1) ) );
+		//return FloatAsInt( Q_acos( VMF(1) ) );
+		return FloatAsInt( acos( VMF(1) ) ); // Cowcat
 
 	case CG_PC_ADD_GLOBAL_DEFINE:
 		return botlib_export->PC_AddGlobalDefine( VMA(1) );

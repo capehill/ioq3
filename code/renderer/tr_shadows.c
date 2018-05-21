@@ -19,7 +19,13 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
+
 #include "tr_local.h"
+
+#ifdef AMIGA
+#include <mgl/mglmacros.h>
+#endif
+
 
 /*
 
@@ -44,6 +50,7 @@ typedef struct {
 static	edgeDef_t	edgeDefs[SHADER_MAX_VERTEXES][MAX_EDGE_DEFS];
 static	int		numEdgeDefs[SHADER_MAX_VERTEXES];
 static	int		facing[SHADER_MAX_INDEXES/3];
+static  vec3_t		shadowXyz[SHADER_MAX_VERTEXES];
 
 void R_AddEdgeDef( int i1, int i2, int facing )
 {
@@ -116,7 +123,8 @@ void R_RenderShadowEdges( void )
 
 		for ( j = 0 ; j < c ; j++ )
 		{
-			if ( !edgeDefs[ i ][ j ].facing ) {
+			if ( !edgeDefs[ i ][ j ].facing )
+			{
 				continue;
 			}
 
@@ -140,9 +148,11 @@ void R_RenderShadowEdges( void )
 			{
 				qglBegin( GL_TRIANGLE_STRIP );
 				qglVertex3fv( tess.xyz[ i ] );
-				qglVertex3fv( tess.xyz[ i + tess.numVertexes ] );
+				//qglVertex3fv( tess.xyz[ i + tess.numVertexes ] );
+				qglVertex3fv( shadowXyz[ i ] );
 				qglVertex3fv( tess.xyz[ i2 ] );
-				qglVertex3fv( tess.xyz[ i2 + tess.numVertexes ] );
+				//qglVertex3fv( tess.xyz[ i2 + tess.numVertexes ] );
+				qglVertex3fv( shadowXyz[ i2 ] );
 				qglEnd();
 
 				c_edges++;
@@ -176,16 +186,18 @@ void RB_ShadowTessEnd( void )
 	vec3_t		lightDir;
 	GLboolean 	rgba[4];
 
+	#if 1
 	// we can only do this if we have enough space in the vertex buffers
 	if ( tess.numVertexes >= SHADER_MAX_VERTEXES / 2 )
 	{
 		return;
 	}
 
-	if ( glConfig.stencilBits < 4 )
+	//if ( glConfig.stencilBits < 4 )
 	{
-		return;
+		//return;
 	}
+	#endif
 
 	VectorCopy( backEnd.currentEntity->lightDir, lightDir );
 
@@ -255,14 +267,12 @@ void RB_ShadowTessEnd( void )
 	// mirrors have the culling order reversed
 	if ( backEnd.viewParms.isMirror )
 	{
-		//qglCullFace( GL_FRONT );
-		GL_Cull (CT_FRONT_SIDED); // new ioq3 - Cowcat
+		GL_Cull (CT_FRONT_SIDED);
 		//qglStencilOp( GL_KEEP, GL_KEEP, GL_INCR ); // Cowcat
 
 		R_RenderShadowEdges();
 
-		//qglCullFace( GL_BACK );
-		GL_Cull (CT_BACK_SIDED); // new ioq3 - Cowcat
+		GL_Cull (CT_BACK_SIDED);
 		//qglStencilOp( GL_KEEP, GL_KEEP, GL_DECR ); // Cowcat
 
 		R_RenderShadowEdges();
@@ -270,14 +280,12 @@ void RB_ShadowTessEnd( void )
 
 	else
 	{
-		//qglCullFace( GL_BACK );
-		GL_Cull (CT_BACK_SIDED); // new ioq3 - Cowcat
+		GL_Cull (CT_BACK_SIDED);
 		//qglStencilOp( GL_KEEP, GL_KEEP, GL_INCR ); // Cowcat
 
 		R_RenderShadowEdges();
 
-		//qglCullFace( GL_FRONT );
-		GL_Cull (CT_FRONT_SIDED); // new ioq3 - Cowcat
+		GL_Cull (CT_FRONT_SIDED);
 		//qglStencilOp( GL_KEEP, GL_KEEP, GL_DECR ); // Cowcat
 
 		R_RenderShadowEdges();
@@ -300,6 +308,7 @@ overlap and double darken.
 */
 void RB_ShadowFinish( void )
 {
+	#if 1
 	if ( r_shadows->integer != 2 )
 	{
 		return;
@@ -309,13 +318,16 @@ void RB_ShadowFinish( void )
 	{
 		return;
 	}
+	#endif
 
-	//qglEnable( GL_STENCIL_TEST );
-	//qglStencilFunc( GL_NOTEQUAL, 0, 255 );
+	//if ( r_shadows->integer != 1 )
+		//return;
 
-	//qglDisable (GL_CLIP_PLANE0);
-	//qglDisable (GL_CULL_FACE);
-	GL_Cull (CT_TWO_SIDED); // new ioq3 - Cowcat
+	//qglEnable( GL_STENCIL_TEST ); // Cowcat
+	//qglStencilFunc( GL_NOTEQUAL, 0, 255 ); // Cowcat
+
+	//qglDisable (GL_CLIP_PLANE0); // Cowcat
+	GL_Cull (CT_TWO_SIDED);
 
 	GL_Bind( tr.whiteImage );
 

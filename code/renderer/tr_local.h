@@ -28,16 +28,17 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "../qcommon/qcommon.h"
 #include "tr_public.h"
 
-#if defined(AMIGA) && defined(__VBCC__) && defined (__PPC__)
+#if defined(AMIGA) && defined(__VBCC__)
 
 #undef LittleShort
 #undef LittleLong
 #undef LittleFloat
 
+#if defined (__PPC__)
+
 short __LittleShort(__reg("r4") short ) =
-	"\trlwinm\t0,4,8,16,24\n"
-	"\trlwimi\t0,4,24,24,31\n"
-	"\textsh\t3,0";
+	"\trlwinm\t3,4,24,24,31\n"
+	"\trlwimi\t3,4,8,16,23";
 
 int __LittleLong(__reg("r4") int) =
 	"\trlwinm\t3,4,24,0,31\n"
@@ -53,6 +54,25 @@ float __LittleFloat(__reg("f1") float) =
 	"\tlfs\tf1,24(r1)\n"
 	"\taddi\tr1,r1,32";
 
+#else // 68k
+
+short __LittleShort(__reg("d0") short ) =
+	"\trol.w\t#8,d0";
+
+int __LittleLong(__reg("d0") int) =
+	"\trol.w\t#8,d0\n"
+	"\tswap\td0\n"
+	"\trol.w\t#8,d0";
+
+float __LittleFloat(__reg("fp0") float) =
+	"\tfmove.s\tfp0,d0\n"
+	"\trol.w\t#8,d0\n"
+	"\tswap\td0\n"
+	"\trol.w\t#8,d0\n"
+	"\tfmove.s\td0,fp0";
+
+#endif
+
 #define LittleShort(x) __LittleShort(x)
 #define LittleLong(x) __LittleLong(x)
 #define LittleFloat(x) __LittleFloat(x)
@@ -61,9 +81,10 @@ float __LittleFloat(__reg("f1") float) =
 
 #include "qgl.h"
 
-#define GL_INDEX_TYPE	GL_UNSIGNED_INT
-
-typedef unsigned int glIndex_t;
+//#define GL_INDEX_TYPE	GL_UNSIGNED_INT
+//typedef unsigned int glIndex_t;
+#define GL_INDEX_TYPE	GL_UNSIGNED_SHORT // test - Cowcat
+typedef unsigned short glIndex_t; // test -Cowcat
 
 // fast float to int conversion
 #if id386 && !defined(__GNUC__)
@@ -72,24 +93,11 @@ long myftol( float f );
 #define myftol(x) ((int)(x))
 #endif
 
-
-// everything that is needed by the backend needs
-// to be double buffered to allow it to run in
-// parallel on a dual cpu machine
-#define SMP_FRAMES		2
-
-// 12 bits
-// see QSORT_SHADERNUM_SHIFT
-#define MAX_SHADERS		16384
-
-#if 0 // not used - Cowcat
-//#define MAX_SHADER_STATES 	2048
-#define MAX_STATES_PER_SHADER 	32
-#define MAX_STATE_NAME		32
-#endif
-
+// 14 bits
 // can't be increased without changing bit packing for drawsurfs
-
+// see QSORT_SHADERNUM_SHIFT
+#define SHADERNUM_BITS	14
+#define MAX_SHADERS	(1<<SHADERNUM_BITS)
 
 typedef struct dlight_s {
 	vec3_t	origin;
@@ -127,6 +135,28 @@ typedef struct {
 
 } orientationr_t;
 
+typedef enum
+{
+	IMGTYPE_COLORALPHA,	// for color, lightmap, diffuse, and specular
+	IMGTYPE_NORMAL,
+	IMGTYPE_NORMALHEIGHT,
+	IMGTYPE_DELUXE,		// normals are swizzled, deluxe are not
+
+} imgType_t;
+
+typedef enum
+{
+	IMGFLAG_NONE           = 0x0000,
+	IMGFLAG_MIPMAP         = 0x0001,
+	IMGFLAG_PICMIP         = 0x0002,
+	IMGFLAG_CUBEMAP        = 0x0004,
+	IMGFLAG_NO_COMPRESSION = 0x0010,
+	IMGFLAG_NOLIGHTSCALE   = 0x0020,
+	IMGFLAG_CLAMPTOEDGE    = 0x0040,
+	IMGFLAG_GENNORMALMAP   = 0x0080,
+
+} imgFlags_t;
+
 typedef struct image_s {
 	char		imgName[MAX_QPATH];		// game path, including extension
 	int		width, height;			// source image
@@ -138,9 +168,8 @@ typedef struct image_s {
 	int		internalFormat;
 	int		TMU;			// only needed for voodoo2
 
-	qboolean	mipmap;
-	qboolean	allowPicmip;
-	int		wrapClampMode;		// GL_CLAMP_TO_EDGE or GL_REPEAT
+	imgType_t	type;
+	imgFlags_t	flags;
 
 	struct image_s* next;
 
@@ -181,13 +210,11 @@ typedef enum {
 
 typedef enum {
 	GF_NONE,
-
 	GF_SIN,
 	GF_SQUARE,
 	GF_TRIANGLE,
 	GF_SAWTOOTH, 
 	GF_INVERSE_SAWTOOTH, 
-
 	GF_NOISE
 
 } genFunc_t;
@@ -264,7 +291,6 @@ typedef enum {
 
 typedef struct {
 	genFunc_t	func;
-
 	float		base;
 	float		amplitude;
 	float		phase;
@@ -303,26 +329,26 @@ typedef struct {
 
 
 typedef struct {
-	texMod_t		type;
+	texMod_t	type;
 
 	// used for TMOD_TURBULENT and TMOD_STRETCH
-	waveForm_t		wave;
+	waveForm_t	wave;
 
 	// used for TMOD_TRANSFORM
-	float			matrix[2][2];		// s' = s * m[0][0] + t * m[1][0] + trans[0]
-	float			translate[2];		// t' = s * m[0][1] + t * m[0][1] + trans[1]
+	float		matrix[2][2];		// s' = s * m[0][0] + t * m[1][0] + trans[0]
+	float		translate[2];		// t' = s * m[0][1] + t * m[0][1] + trans[1]
 
 	// used for TMOD_SCALE
-	float			scale[2];		// s *= scale[0]
-							// t *= scale[1]
+	float		scale[2];		// s *= scale[0]
+						// t *= scale[1]
 
 	// used for TMOD_SCROLL
-	float			scroll[2];		// s' = s + scroll[0] * time
-							// t' = t + scroll[1] * time
+	float		scroll[2];		// s' = s + scroll[0] * time
+						// t' = t + scroll[1] * time
 
 	// + = clockwise
 	// - = counterclockwise
-	float			rotateSpeed;
+	float		rotateSpeed;
 
 } texModInfo_t;
 
@@ -342,7 +368,6 @@ typedef struct {
 
 	int			videoMapHandle;
 	qboolean		isLightmap;
-	//qboolean		vertexLightmap; // is never true - Cowcat
 	qboolean		isVideoMap;
 
 } textureBundle_t;
@@ -460,31 +485,11 @@ typedef struct shader_s {
 	float		clampTime;		// time this shader is clamped to
 	float		timeOffset;		// current time offset for this shader
 
-	//int		numStates;		// if non-zero this is a state shader
-	//struct shader_s *currentShader;	// current state if this is a state shader
-	//struct shader_s *parentShader;	// current state if this is a state shader
-	//int		currentState;		// current state index for cycle purposes
-	//long		expireTime;		// time in milliseconds this expires
-
 	struct shader_s *remappedShader;	// current shader this one is remapped too
-
-	//int		shaderStates[MAX_STATES_PER_SHADER];	// index to valid shader states
 
 	struct shader_s *next;
 
 } shader_t;
-
-#if 0 // not used -Cowcat
-typedef struct shaderState_s {
-	char shaderName[MAX_QPATH];	// name of shader this state belongs to
-	char name[MAX_STATE_NAME];	// name of this state
-	char stateShader[MAX_QPATH];	// shader this name invokes
-	int cycleTime;			// time this cycle lasts, <= 0 is forever
-	shader_t *shader;
-
-} shaderState_t;
-#endif
-
 
 // trRefdef_t holds everything that comes in refdef_t,
 // as well as the locally generated scene information
@@ -526,9 +531,11 @@ typedef struct {
 
 //=================================================================================
 
-// new ioq3 sources - Cowcat
-
-#define MAX_SKIN_SURFACES	256 // arbitrary limit - new
+// max surfaces per-skin
+// This is an arbitry limit. Vanilla Q3 only supported 32 surfaces in skins but failed to
+// enforce the maximum limit when reading skin files. It was possile to use more than 32
+// surfaces which accessed out of bounds memory past end of skin->surfaces hunk block.
+#define MAX_SKIN_SURFACES	256
 
 // skins allow models to be retextured without modifying the model file
 typedef struct {
@@ -540,8 +547,7 @@ typedef struct {
 typedef struct skin_s {
 	char		name[MAX_QPATH];		// game path, including extension
 	int		numSurfaces;
-	//skinSurface_t	*surfaces[MD3_MAX_SURFACES];
-	skinSurface_t	*surfaces; 	// new ioq3 - Cowcat
+	skinSurface_t	*surfaces;
 
 } skin_t;
 
@@ -598,12 +604,11 @@ typedef enum {
 	SF_POLY,
 	SF_MD3,
 	SF_MD4,
-#ifdef RAVENMD4
+  #ifdef RAVENMD4
 	SF_MDR,
-#endif
+ #endif
 	SF_FLARE,
 	SF_ENTITY,				// beams, rails, lightning, etc that can be determined by entity
-	//SF_DISPLAY_LIST,			// never used - Cowcat
 
 	SF_NUM_SURFACE_TYPES,
 	SF_MAX = 0x7fffffff			// ensures that sizeof( surfaceType_t ) == sizeof( int )
@@ -633,19 +638,12 @@ typedef struct srfPoly_s {
 
 } srfPoly_t;
 
-#if 0 // never used - Cowcat
-typedef struct srfDisplayList_s {
-	surfaceType_t	surfaceType;
-	int		listNum;
-
-} srfDisplayList_t;
-#endif
 
 typedef struct srfFlare_s {
-	surfaceType_t		surfaceType;
-	vec3_t			origin;
-	vec3_t			normal;
-	vec3_t			color;
+	surfaceType_t	surfaceType;
+	vec3_t		origin;
+	vec3_t		normal;
+	vec3_t		color;
 
 } srfFlare_t;
 
@@ -653,7 +651,7 @@ typedef struct srfGridMesh_s {
 	surfaceType_t		surfaceType;
 
 	// dynamic lighting information
-	int			dlightBits[SMP_FRAMES];
+	int			dlightBits;
 
 	// culling information
 	vec3_t			meshBounds[2];
@@ -684,7 +682,7 @@ typedef struct {
 	cplane_t	plane;
 
 	// dynamic lighting information
-	int		dlightBits[SMP_FRAMES];
+	int		dlightBits;
 
 	// triangle definitions (no normals at points)
 	int		numPoints;
@@ -700,7 +698,7 @@ typedef struct {
 	surfaceType_t		surfaceType;
 
 	// dynamic lighting information
-	int			dlightBits[SMP_FRAMES];
+	int			dlightBits;
 
 	// culling information (FIXME: use this!)
 	vec3_t			bounds[2];
@@ -727,7 +725,6 @@ BRUSH MODELS
 ==============================================================================
 */
 
-
 //
 // in memory representation
 //
@@ -744,7 +741,6 @@ typedef struct msurface_s {
 	surfaceType_t		*data;		// any of srf*_t
 
 } msurface_t;
-
 
 
 #define CONTENTS_NODE	-1
@@ -810,7 +806,6 @@ typedef struct {
 	int		lightGridBounds[3];
 	byte		*lightGridData;
 
-
 	int		numClusters;
 	int		clusterBytes;
 	const byte	*vis;			// may be passed in by CM_LoadMap to save space
@@ -856,7 +851,6 @@ void		R_ModelInit (void);
 model_t		*R_GetModelByHandle( qhandle_t hModel );
 int		R_LerpTag( orientation_t *tag, qhandle_t handle, int startFrame, int endFrame, float frac, const char *tagName );
 void		R_ModelBounds( qhandle_t handle, vec3_t mins, vec3_t maxs );
-
 void		R_Modellist_f (void);
 
 //====================================================
@@ -865,7 +859,6 @@ extern	refimport_t	ri;
 #define MAX_DRAWIMAGES	2048
 #define MAX_LIGHTMAPS	256
 #define MAX_SKINS	1024
-
 
 #define MAX_DRAWSURFS	0x10000
 #define DRAWSURF_MASK	(MAX_DRAWSURFS-1)
@@ -889,9 +882,16 @@ the bits are allocated as follows:
 2-6   : fog index
 0-1   : dlightmap index
 */
-#define QSORT_SHADERNUM_SHIFT	17
-#define QSORT_ENTITYNUM_SHIFT	7
+
 #define QSORT_FOGNUM_SHIFT	2
+#define QSORT_ENTITYNUM_SHIFT	7
+//#define QSORT_SHADERNUM_SHIFT	17
+
+#define QSORT_SHADERNUM_SHIFT	(QSORT_ENTITYNUM_SHIFT+ENTITYNUM_BITS)
+#if (QSORT_SHADERNUM_SHIFT+SHADERNUM_BITS) > 32
+	#error "need to update sorting"
+#endif
+
 
 extern	int gl_filter_min, gl_filter_max;
 
@@ -903,7 +903,6 @@ typedef struct {
 	int		c_box_cull_patch_in, c_box_cull_patch_clip, c_box_cull_patch_out;
 	int		c_sphere_cull_md3_in, c_sphere_cull_md3_clip, c_sphere_cull_md3_out;
 	int		c_box_cull_md3_in, c_box_cull_md3_clip, c_box_cull_md3_out;
-
 	int		c_leafs;
 	int		c_dlightSurfaces;
 	int		c_dlightSurfacesCulled;
@@ -927,7 +926,6 @@ typedef struct {
 
 } glstate_t;
 
-
 typedef struct {
 	int		c_surfaces, c_shaders, c_vertexes, c_indexes, c_totalIndexes;
 	float		c_overDraw;
@@ -947,7 +945,6 @@ typedef struct {
 // from the front end state
 
 typedef struct {
-	int			smpFrame;
 	trRefdef_t		refdef;
 	viewParms_t		viewParms;
 	orientationr_t		or;
@@ -955,11 +952,10 @@ typedef struct {
 	qboolean		isHyperspace;
 	trRefEntity_t		*currentEntity;
 	qboolean		skyRenderedThisView;	// flag for drawing sun
-
-	qboolean		projection2D;	// if qtrue, drawstretchpic doesn't need to change modes
+	qboolean		projection2D;		// if qtrue, drawstretchpic doesn't need to change modes
 	byte			color2D[4];
-	qboolean		vertexes2D;	// shader needs to be finished
-	trRefEntity_t		entity2D;	// currentEntity will point at this when doing 2D rendering
+	qboolean		vertexes2D;		// shader needs to be finished
+	trRefEntity_t		entity2D;		// currentEntity will point at this when doing 2D rendering
 
 } backEndState_t;
 
@@ -978,11 +974,9 @@ typedef struct {
 	int					frameCount;		// incremented every frame
 	int					sceneCount;		// incremented every scene
 	int					viewCount;		// incremented every view (twice a scene if portaled)
-											// and every R_MarkFragments call
+									// and every R_MarkFragments call
 
-	int					smpFrame;		// toggles from 0 to 1 every endFrame
-
-	int					frameSceneNum;	// zeroed at RE_BeginFrame
+	int					frameSceneNum;		// zeroed at RE_BeginFrame
 
 	qboolean				worldMapLoaded;
 	world_t					*world;
@@ -990,11 +984,11 @@ typedef struct {
 	const byte				*externalVisData;	// from RE_SetWorldVisData, shared with CM_Load
 
 	image_t					*defaultImage;
-	image_t					*scratchImage[32];
+	image_t					*scratchImage[MAX_VIDEO_HANDLES]; // *scratchImage[32]; - Cowcat
 	image_t					*fogImage;
-	image_t					*dlightImage;	// inverse-quare highlight for projective adding
+	image_t					*dlightImage;		// inverse-quare highlight for projective adding
 	image_t					*flareImage;
-	image_t					*whiteImage;			// full of 0xff
+	image_t					*whiteImage;		// full of 0xff
 	image_t					*identityLightImage;	// full of tr.identityLightByte
 
 	shader_t				*defaultShader;
@@ -1019,7 +1013,7 @@ typedef struct {
 	int					identityLightByte;	// identityLight * 255
 	int					overbrightBits;		// r_overbrightBits->integer, but set to 0 if no hw gamma
 
-	orientationr_t				or;					// for current entity
+	orientationr_t				or;			// for current entity
 
 	trRefdef_t				refdef;
 
@@ -1077,8 +1071,10 @@ extern float	 displayAspect;
 //
 // cvars
 //
+
 extern cvar_t	*r_flareSize;
 extern cvar_t	*r_flareFade;
+
 // coefficient for the flare intensity falloff function.
 #define FLARE_STDCOEFF "150"
 extern cvar_t	*r_flareCoeff;
@@ -1104,7 +1100,7 @@ extern cvar_t	*r_texturebits;			// number of desired texture bits
 						// 32 = use 32-bit textures
 						// all else = error
 
-extern cvar_t	*r_measureOverdraw;		// enables stencil buffer overdraw measurement
+//extern cvar_t	*r_measureOverdraw;		// enables stencil buffer overdraw measurement - Disabled - Cowcat
 
 extern cvar_t	*r_lodbias;			// push/pull LOD transitions
 extern cvar_t	*r_lodscale;
@@ -1181,8 +1177,6 @@ extern	cvar_t	*r_portalOnly;
 
 extern	cvar_t	*r_subdivisions;
 extern	cvar_t	*r_lodCurveError;
-extern	cvar_t	*r_smp;
-extern	cvar_t	*r_showSmp;
 extern	cvar_t	*r_skipBackEnd;
 
 extern	cvar_t	*r_stereoEnabled;
@@ -1303,9 +1297,11 @@ qboolean	R_GetEntityToken( char *buffer, int size );
 model_t *R_AllocModel( void );
 
 void	R_Init( void );
-image_t *R_FindImageFile( const char *name, qboolean mipmap, qboolean allowPicmip, int glWrapClampMode );
 
-image_t *R_CreateImage( const char *name, const byte *pic, int width, int height, qboolean mipmap, qboolean allowPicmip, int wrapClampMode );
+image_t *R_FindImageFile( const char *name, imgType_t type, imgFlags_t flags);
+
+image_t	*R_CreateImage( const char *name, const byte *pic, int width, int height, imgType_t type, imgFlags_t flags, int internalFormat );
+
 qboolean R_GetModeInfo( int *width, int *height, float *windowAspect, int mode );
 
 void	R_SetColorMappings( void );
@@ -1326,7 +1322,7 @@ int	R_SumOfUsedImages( void );
 void	R_InitSkins( void );
 skin_t	*R_GetSkinByHandle( qhandle_t hSkin );
 
-int R_ComputeLOD( trRefEntity_t *ent );
+int	R_ComputeLOD( trRefEntity_t *ent );
 
 const void *RB_TakeVideoFrameCmd( const void *data );
 
@@ -1357,12 +1353,6 @@ IMPLEMENTATION SPECIFIC FUNCTIONS
 void		GLimp_Init( void );
 void		GLimp_Shutdown( void );
 void		GLimp_EndFrame( void );
-
-qboolean	GLimp_SpawnRenderThread( void (*function)( void ) );
-void		*GLimp_RendererSleep( void );
-void		GLimp_FrontEndSleep( void );
-void		GLimp_WakeRenderer( void *data );
-
 void		GLimp_LogComment( char *comment );
 
 // NOTE TTimo linux works with float gamma value, not the gamma table
@@ -1423,6 +1413,7 @@ void RB_EndSurface(void);
 void RB_CheckOverflow( int verts, int indexes );
 
 #define RB_CHECKOVERFLOW(v,i) if (tess.numVertexes + (v) >= SHADER_MAX_VERTEXES || tess.numIndexes + (i) >= SHADER_MAX_INDEXES ) {RB_CheckOverflow(v,i);}
+//#define RB_CHECKOVERFLOW(v,i) RB_CheckOverflow(v,i)
 
 void RB_StageIteratorGeneric( void );
 void RB_StageIteratorSky( void );
@@ -1457,7 +1448,6 @@ FLARES
 */
 
 void R_ClearFlares( void );
-
 void RB_AddFlare( void *surface, int fogNum, vec3_t point, vec3_t color, vec3_t normal );
 void RB_AddDlightFlares( void );
 void RB_RenderFlares (void);
@@ -1537,7 +1527,7 @@ SCENE GENERATION
 ============================================================
 */
 
-void R_ToggleSmpFrame( void );
+void R_InitNextFrame(void);
 
 void RE_ClearScene( void );
 void RE_AddRefEntityToScene( const refEntity_t *ent );
@@ -1581,7 +1571,7 @@ void RB_SurfaceAnim( md4Surface_t *surfType );
 
 #ifdef RAVENMD4
 void R_MDRAddAnimSurfaces( trRefEntity_t *ent );
-void RB_MDRSurfaceAnim( md4Surface_t *surface );
+void RB_MDRSurfaceAnim( mdrSurface_t *surface );
 #endif
 
 /*
@@ -1635,7 +1625,6 @@ RENDERER BACK END FUNCTIONS
 =============================================================
 */
 
-void RB_RenderThread( void );
 void RB_ExecuteRenderCommands( const void *data );
 
 /*
@@ -1762,9 +1751,7 @@ typedef enum {
 #define MAX_POLYVERTS	3000
 
 // all of the information needed by the back end must be
-// contained in a backEndData_t.  This entire structure is
-// duplicated so the front and back end can run in parallel
-// on an SMP machine
+// contained in a BackEndData_t
 
 typedef struct {
 	drawSurf_t		drawSurfs[MAX_DRAWSURFS];
@@ -1779,20 +1766,14 @@ typedef struct {
 extern	int max_polys;
 extern	int max_polyverts;
 
-extern	backEndData_t	*backEndData[SMP_FRAMES];	// the second one may not be allocated
+extern	backEndData_t	*backEndData; // the second one may not be allocated
 
 extern	volatile renderCommandList_t *renderCommandList;
-
-extern	volatile qboolean renderThreadActive;
-
 
 void *R_GetCommandBuffer( int bytes );
 void RB_ExecuteRenderCommands( const void *data );
 
-void R_InitCommandBuffers( void );
-void R_ShutdownCommandBuffers( void );
-
-void R_SyncRenderThread( void );
+void R_IssuePendingRenderCommands( void );
 
 void R_AddDrawSurfCmd( drawSurf_t *drawSurfs, int numDrawSurfs );
 

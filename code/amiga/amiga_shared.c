@@ -143,13 +143,13 @@ int Sys_Milliseconds(void)
 	return curtime.tv_sec * 1000 + curtime.tv_usec/1000;
 }
 
-#else
-
-static unsigned int inittime = 0L;
+#else // Cowcat
 
 #if defined(AMIGA) && !defined(__PPC__)
 extern struct Library *TimerBase;
 #endif
+
+static unsigned int inittime = 0L;
 
 int Sys_Milliseconds(void)
 {
@@ -198,12 +198,18 @@ float rintf(float x)
 		{
 			x += TWO23;
 			x -= TWO23;
+
+			if(x == 0.0)
+				x = 0.0;
 		}
 
 		else if (x < 0.0)
 		{
 			x = TWO23 - x;
 			x = -(x - TWO23);
+
+			if(x == 0.0)
+				x = -0.0;
 		}
 		
 	}
@@ -212,11 +218,15 @@ float rintf(float x)
 }
 #endif
 
+//#include "../renderer/tr_local.h"
+
 void Sys_SnapVector(float *v)
 {
 	v[0] = rint(v[0]);
 	v[1] = rint(v[1]);
 	v[2] = rint(v[2]);
+
+	//ri.Printf(PRINT_ALL, "rint 0 %f, 1 %f, 2 %f\n", v[0],v[1],v[2]);
 }
 
 

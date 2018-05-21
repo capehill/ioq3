@@ -86,10 +86,15 @@ optimization to prevent disk rescanning if they are
 asked for again.
 ====================
 */
+
 qhandle_t RE_RegisterModel( const char *name )
 {
 	model_t		*mod;
-	unsigned	*buf;
+	//unsigned	*buf;
+	union {
+		unsigned *u;
+		void	 *v;
+	} buf;
 	int		lod;
 	int		ident;
 	qboolean	loaded = qfalse;
@@ -137,8 +142,7 @@ qhandle_t RE_RegisterModel( const char *name )
 	// only set the name after the model has been successfully loaded
 	Q_strncpyz( mod->name, name, sizeof( mod->name ) );
 
-	// make sure the render thread is stopped
-	R_SyncRenderThread();
+	R_IssuePendingRenderCommands();
 
 	mod->numLods = 0;
 
@@ -202,20 +206,24 @@ qhandle_t RE_RegisterModel( const char *name )
 		else
 			Com_sprintf(namebuf, sizeof(namebuf), "%s.%s", filename, fext);
 
-		ri.FS_ReadFile( namebuf, (void **)&buf );
+		//ri.FS_ReadFile( namebuf, (void **)&buf );
+		ri.FS_ReadFile( namebuf, &buf.v );
 
-		if ( !buf )
+		//if ( !buf )
+		if ( !buf.u )
 		{
 			continue;
 		}
 		
 		loadmodel = mod;
 		
-		ident = LittleLong(*(unsigned *)buf);
+		//ident = LittleLong(*(unsigned *)buf);
+		ident = LittleLong(*(unsigned *)buf.u);
 
 		if ( ident == MD4_IDENT )
 		{
-			loaded = R_LoadMD4( mod, buf, name );
+			//loaded = R_LoadMD4( mod, buf, name );
+			loaded = R_LoadMD4( mod, buf.u, name );
 		}
 
 		else
@@ -226,10 +234,12 @@ qhandle_t RE_RegisterModel( const char *name )
 				goto fail;
 			}
 
-			loaded = R_LoadMD3( mod, lod, buf, name );
+			//loaded = R_LoadMD3( mod, lod, buf, name );
+			loaded = R_LoadMD3( mod, lod, buf.u, name );
 		}
 		
-		ri.FS_FreeFile (buf);
+		//ri.FS_FreeFile (buf);
+		ri.FS_FreeFile (buf.v);
 
 		if ( !loaded )
 		{
@@ -248,6 +258,7 @@ qhandle_t RE_RegisterModel( const char *name )
 		{
 			mod->numLods++;
 			numLoaded++;
+
 			// if we have a valid model and are biased
 			// so that we won't see any higher detail ones,
 			// stop loading them
@@ -270,7 +281,8 @@ qhandle_t RE_RegisterModel( const char *name )
 		return mod->index;
 	}
 #ifdef _DEBUG
-	else {
+	else
+	{
 		ri.Printf (PRINT_WARNING,"RE_RegisterModel: couldn't load %s\n", name);
 	}
 #endif
@@ -380,22 +392,7 @@ static qboolean R_LoadMD3 (model_t *mod, int lod, void *buffer, const char *mod_
         	LL(surf->ofsSt);
         	LL(surf->ofsXyzNormals);
         	LL(surf->ofsEnd);
-	
-		/*
-		if ( surf->numVerts > SHADER_MAX_VERTEXES )
-		{
-			ri.Error (ERR_DROP, "R_LoadMD3: %s has more than %i verts on a surface (%i)",
-				mod_name, SHADER_MAX_VERTEXES, surf->numVerts );
-		}
 
-		if ( surf->numTriangles*3 > SHADER_MAX_INDEXES )
-		{
-			ri.Error (ERR_DROP, "R_LoadMD3: %s has more than %i triangles on a surface (%i)",
-				mod_name, SHADER_MAX_INDEXES / 3, surf->numTriangles );
-		}
-		*/
-
-		// fix - Cowcat
 		if ( surf->numVerts >= SHADER_MAX_VERTEXES )
 		{
 			ri.Printf (PRINT_WARNING, "R_LoadMD3: %s has more than %i verts on %s (%i).\n",
@@ -896,7 +893,7 @@ static qboolean R_LoadMD4( model_t *mod, void *buffer, const char *mod_name )
 	// swap all the frames
 	frameSize = (size_t)( &((md4Frame_t *)0)->bones[ md4->numBones ] );
 
-    	for ( i = 0 ; i < md4->numFrames ; i++, frame++)
+    	for ( i = 0 ; i < md4->numFrames ; i++) // , frame++) // fix - Cowcat
 	{
 	    	frame = (md4Frame_t *) ( (byte *)md4 + md4->ofsFrames + i * frameSize );
     		frame->radius = LittleFloat( frame->radius );
@@ -931,18 +928,6 @@ static qboolean R_LoadMD4( model_t *mod, void *buffer, const char *mod_name )
 			LL(surf->ofsVerts);
 			LL(surf->ofsEnd);
 			
-			/*
-			if ( surf->numVerts > SHADER_MAX_VERTEXES ) {
-				ri.Error (ERR_DROP, "R_LoadMD3: %s has more than %i verts on a surface (%i)",
-					mod_name, SHADER_MAX_VERTEXES, surf->numVerts );
-			}
-			if ( surf->numTriangles*3 > SHADER_MAX_INDEXES ) {
-				ri.Error (ERR_DROP, "R_LoadMD3: %s has more than %i triangles on a surface (%i)",
-					mod_name, SHADER_MAX_INDEXES / 3, surf->numTriangles );
-			}
-			*/
-
-			// fix - Cowcat
 			if ( surf->numVerts >= SHADER_MAX_VERTEXES )
 			{
 				ri.Printf (PRINT_WARNING, "R_LoadMD4: %s has more than %i verts on %s (%i).\n",
@@ -1035,7 +1020,6 @@ static qboolean R_LoadMD4( model_t *mod, void *buffer, const char *mod_name )
 }
 
 
-
 //=============================================================================
 
 /*
@@ -1047,7 +1031,7 @@ void RE_BeginRegistration( glconfig_t *glconfigOut )
 
 	*glconfigOut = glConfig;
 
-	R_SyncRenderThread();
+	R_IssuePendingRenderCommands();
 
 	tr.viewCluster = -1;		// force markleafs to regenerate
 	R_ClearFlares();
@@ -1113,8 +1097,9 @@ void R_Modellist_f( void )
 
 	ri.Printf( PRINT_ALL, "%8i : Total models\n", total );
 
-#if	0		// not working right with new hunk
-	if ( tr.world ) {
+#if 0	// not working right with new hunk
+	if ( tr.world )
+	{
 		ri.Printf( PRINT_ALL, "\n%8i : %s\n", tr.world->dataSize, tr.world->name );
 	}
 #endif
@@ -1219,7 +1204,7 @@ int R_LerpTag( orientation_t *tag, qhandle_t handle, int startFrame, int endFram
 	if ( !model->md3[0] )
 	{
 #ifdef RAVENMD4
-		if(model->md4)
+		if(model->type == MOD_MDR)
 		{
 			start = &start_space;
 			end = &end_space;
@@ -1230,10 +1215,13 @@ int R_LerpTag( orientation_t *tag, qhandle_t handle, int startFrame, int endFram
 		else
 #endif
 		{
-
+			#if 0
 			AxisClear( tag->axis );
 			VectorClear( tag->origin );
 			return qfalse;
+			#endif
+
+			start = end = NULL; // test Cowcat
 
 		}
 	}
@@ -1243,14 +1231,25 @@ int R_LerpTag( orientation_t *tag, qhandle_t handle, int startFrame, int endFram
 		start = R_GetTag( model->md3[0], startFrame, tagName );
 		end = R_GetTag( model->md3[0], endFrame, tagName );
 
+		#if 0
 		if ( !start || !end )
 		{
 			AxisClear( tag->axis );
 			VectorClear( tag->origin );
 			return qfalse;
 		}
+		#endif
 	}
 	
+	//
+	if ( !start || !end ) // test - Cowcat
+	{
+		AxisClear( tag->axis );
+		VectorClear( tag->origin );
+		return qfalse;
+	}
+	//
+
 	frontLerp = frac;
 	backLerp = 1.0f - frac;
 

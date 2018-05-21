@@ -21,7 +21,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 #include "tr_local.h"
 
-backEndData_t	*backEndData[SMP_FRAMES];
+backEndData_t	*backEndData;
 backEndState_t	backEnd;
 
 static float s_flipMatrix[16] = 
@@ -53,14 +53,16 @@ void GL_Bind( image_t *image )
 		texnum = image->texnum;
 	}
 
-	if ( r_nobind->integer && tr.dlightImage )
-	{	// performance evaluation option
+	if ( r_nobind->integer && tr.dlightImage ) // performance evaluation option
+	{	
 		texnum = tr.dlightImage->texnum;
 	}
 
 	if ( glState.currenttextures[glState.currenttmu] != texnum )
 	{
-		image->frameUsed = tr.frameCount;
+		if ( image )
+			image->frameUsed = tr.frameCount;
+
 		glState.currenttextures[glState.currenttmu] = texnum;
 		qglBindTexture (GL_TEXTURE_2D, texnum);
 	}
@@ -138,6 +140,7 @@ void GL_BindMultitexture( image_t *image0, GLuint env0, image_t *image1, GLuint 
 /*
 ** GL_Cull
 */
+
 void GL_Cull( int cullType )
 {
 	if ( glState.faceCulling == cullType )
@@ -154,35 +157,20 @@ void GL_Cull( int cullType )
 
 	else 
 	{
+		qboolean cullFront;
 		qglEnable( GL_CULL_FACE );
+	
+		cullFront = (cullType == CT_FRONT_SIDED);
 
-		if ( cullType == CT_BACK_SIDED )
+		if ( backEnd.viewParms.isMirror )
 		{
-			if ( backEnd.viewParms.isMirror )
-			{
-				qglCullFace( GL_FRONT );
-			}
-
-			else
-			{
-				qglCullFace( GL_BACK );
-			}
+			cullFront = !cullFront;
 		}
 
-		else
-		{
-			if ( backEnd.viewParms.isMirror )
-			{
-				qglCullFace( GL_BACK );
-			}
-
-			else
-			{
-				qglCullFace( GL_FRONT );
-			}
-		}
+		qglCullFace( cullFront ? GL_FRONT : GL_BACK );
 	}
 }
+
 
 /*
 ** GL_TexEnv
@@ -256,7 +244,7 @@ void GL_State( unsigned long stateBits )
 	//
 	if ( diff & ( GLS_SRCBLEND_BITS | GLS_DSTBLEND_BITS ) )
 	{
-		GLenum srcFactor, dstFactor;
+		GLenum srcFactor = GL_ONE, dstFactor = GL_ONE;
 
 		if ( stateBits & ( GLS_SRCBLEND_BITS | GLS_DSTBLEND_BITS ) )
 		{
@@ -299,7 +287,7 @@ void GL_State( unsigned long stateBits )
 					break;
 
 				default:
-					srcFactor = GL_ONE;		// to get warning to shut up
+					//srcFactor = GL_ONE;		// to get warning to shut up
 					ri.Error( ERR_DROP, "GL_State: invalid src blend state bits\n" );
 					break;
 			}
@@ -339,7 +327,7 @@ void GL_State( unsigned long stateBits )
 					break;
 
 				default:
-					dstFactor = GL_ONE;		// to get warning to shut up
+					//dstFactor = GL_ONE;		// to get warning to shut up
 					ri.Error( ERR_DROP, "GL_State: invalid dst blend state bits\n" );
 					break;
 			}
@@ -375,15 +363,17 @@ void GL_State( unsigned long stateBits )
 	//
 	if ( diff & GLS_POLYMODE_LINE )
 	{
+		#if 0 // Cowcat
 		if ( stateBits & GLS_POLYMODE_LINE )
 		{
-			//qglPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
+			qglPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
 		}
 
 		else
 		{
 			qglPolygonMode( GL_FRONT_AND_BACK, GL_FILL );
 		}
+		#endif
 	}
 
 	//
@@ -501,6 +491,7 @@ void RB_BeginDrawingView (void)
 	// we will need to change the projection matrix before drawing
 	// 2D images again
 	backEnd.projection2D = qfalse;
+	//qglEnable(MGL_PERSPECTIVE_MAPPING); // TEST for minigl - Cowcat
 
 	//
 	// set the modelview matrix for the viewer
@@ -513,10 +504,12 @@ void RB_BeginDrawingView (void)
 	// clear relevant buffers
 	clearBits = GL_DEPTH_BUFFER_BIT;
 
+	#if 0 // Cowcat
 	if ( r_measureOverdraw->integer || r_shadows->integer == 2 )
 	{
-		//clearBits |= GL_STENCIL_BUFFER_BIT; // Cowcat
+		clearBits |= GL_STENCIL_BUFFER_BIT; 
 	}
+	#endif
 
 	if ( r_fastsky->integer && !( backEnd.refdef.rdflags & RDF_NOWORLDMODEL ) )
 	{
@@ -546,7 +539,8 @@ void RB_BeginDrawingView (void)
 	// we will only draw a sun if there was sky rendered in this view
 	backEnd.skyRenderedThisView = qfalse;
 
-	// Cowcat - don´t disable needed Matrix below.
+	#if 0 // Cowcat - workaround in tr_main/r_mirrorviewbysurface
+
 	// clip to the plane of the portal
 	if ( backEnd.viewParms.isPortal )
 	{
@@ -564,14 +558,16 @@ void RB_BeginDrawingView (void)
 		plane2[3] = DotProduct (plane, backEnd.viewParms.or.origin) - plane[3];
 
 		qglLoadMatrixf( s_flipMatrix );
-		//qglClipPlane (GL_CLIP_PLANE0, plane2); // Cowcat
-		//qglEnable (GL_CLIP_PLANE0); // Cowcat
+		qglClipPlane (GL_CLIP_PLANE0, plane2);
+		qglEnable (GL_CLIP_PLANE0);
 	}
 
 	else
 	{
-		//qglDisable (GL_CLIP_PLANE0); // Cowcat
+		qglDisable (GL_CLIP_PLANE0);
 	}
+
+	#endif
 
 }
 
@@ -628,8 +624,8 @@ void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs )
 		// change the tess parameters if needed
 		// a "entityMergable" shader is a shader that can have surfaces from seperate
 		// entities merged into a single batch, like smoke and blood puff sprites
-		if (shader != oldShader || fogNum != oldFogNum || dlighted != oldDlighted 
-			|| ( entityNum != oldEntityNum && !shader->entityMergable ) )
+		if ( shader != NULL && ( shader != oldShader || fogNum != oldFogNum || dlighted != oldDlighted 
+			|| ( entityNum != oldEntityNum && !shader->entityMergable ) ) )
 		{
 			if (oldShader != NULL)
 			{
@@ -767,12 +763,11 @@ void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs )
 		qglDepthRange (0, 1);
 	}
 
-#if 1 // added - Cowcat
 	if ( r_drawSun->integer )
 	{
 		RB_DrawSun(0.1, tr.sunShader);
 	}
-#endif
+
 	// darken down any stencil shadows
 	RB_ShadowFinish();		
 
@@ -801,6 +796,7 @@ void RB_SetGL2D (void)
 
 	// set 2D virtual screen size
 	qglViewport( 0, 0, glConfig.vidWidth, glConfig.vidHeight );
+
 	qglScissor( 0, 0, glConfig.vidWidth, glConfig.vidHeight );
 	qglMatrixMode(GL_PROJECTION);
 	qglLoadIdentity ();
@@ -810,10 +806,10 @@ void RB_SetGL2D (void)
 
 	GL_State( GLS_DEPTHTEST_DISABLE | GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA );
 
-	//qglDisable( GL_CULL_FACE );
-	GL_Cull(CT_TWO_SIDED); // Cowcat
+	GL_Cull(CT_TWO_SIDED);
 
 	//qglDisable( GL_CLIP_PLANE0 ); // Cowcat
+	//qglDisable(MGL_PERSPECTIVE_MAPPING); // TEST for minigl - Cowcat
 
 	// set time for 2D shaders
 	backEnd.refdef.time = ri.Milliseconds();
@@ -840,15 +836,17 @@ void RE_StretchRaw (int x, int y, int w, int h, int cols, int rows, const byte *
 		return;
 	}
 
-	if(tess.numIndexes)
-		RB_EndSurface(); // new ioq3 - Cowcat
+	R_IssuePendingRenderCommands();
 
-	R_SyncRenderThread();
+	if(tess.numIndexes)
+		RB_EndSurface();
 
 	// we definately want to sync every frame for the cinematics
-	qglFinish();
 
-	start = end = 0;
+	//if( r_finish->integer == 1) // Cowcat
+		qglFinish();
+
+	start = 0;
 
 	if ( r_speeds->integer )
 	{
@@ -867,6 +865,7 @@ void RE_StretchRaw (int x, int y, int w, int h, int cols, int rows, const byte *
 		ri.Error (ERR_DROP, "Draw_StretchRaw: size not a power of 2: %i by %i", cols, rows);
 	}
 
+	#if 0
 	GL_Bind( tr.scratchImage[client] );
 
 	// if the scratchImage isn't in the format we want, specify it as a new texture
@@ -875,6 +874,7 @@ void RE_StretchRaw (int x, int y, int w, int h, int cols, int rows, const byte *
 		tr.scratchImage[client]->width = tr.scratchImage[client]->uploadWidth = cols;
 		tr.scratchImage[client]->height = tr.scratchImage[client]->uploadHeight = rows;
 		qglTexImage2D( GL_TEXTURE_2D, 0, GL_RGB8, cols, rows, 0, GL_RGBA, GL_UNSIGNED_BYTE, data );
+		//qglTexImage2D( GL_TEXTURE_2D, 0, GL_RGBA, cols, rows, 0, GL_RGBA, GL_UNSIGNED_BYTE, data );
 		qglTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
 		qglTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
 		qglTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP /*_TO_EDGE*/ ); // Cowcat
@@ -890,6 +890,9 @@ void RE_StretchRaw (int x, int y, int w, int h, int cols, int rows, const byte *
 			qglTexSubImage2D( GL_TEXTURE_2D, 0, 0, 0, cols, rows, GL_RGBA, GL_UNSIGNED_BYTE, data );
 		}
 	}
+	#endif
+
+	RE_UploadCinematic( w, h, cols, rows, data, client, dirty);
 
 	if ( r_speeds->integer )
 	{
@@ -911,10 +914,12 @@ void RE_StretchRaw (int x, int y, int w, int h, int cols, int rows, const byte *
 	qglTexCoord2f ( 0.5f / cols, ( rows - 0.5f ) / rows );
 	qglVertex2f (x, y+h);
 	qglEnd ();
+
 }
 
-void RE_UploadCinematic (int w, int h, int cols, int rows, const byte *data, int client, qboolean dirty) {
-
+void RE_UploadCinematic (int w, int h, int cols, int rows, const byte *data, int client, qboolean dirty)
+{
+	#if 0
 	GL_Bind( tr.scratchImage[client] );
 
 	// if the scratchImage isn't in the format we want, specify it as a new texture
@@ -923,6 +928,7 @@ void RE_UploadCinematic (int w, int h, int cols, int rows, const byte *data, int
 		tr.scratchImage[client]->width = tr.scratchImage[client]->uploadWidth = cols;
 		tr.scratchImage[client]->height = tr.scratchImage[client]->uploadHeight = rows;
 		qglTexImage2D( GL_TEXTURE_2D, 0, GL_RGB8, cols, rows, 0, GL_RGBA, GL_UNSIGNED_BYTE, data );
+		//qglTexImage2D( GL_TEXTURE_2D, 0, GL_RGBA, cols, rows, 0, GL_RGBA, GL_UNSIGNED_BYTE, data );
 		qglTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
 		qglTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
 		qglTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP /*_TO_EDGE*/ ); // Cowcat
@@ -938,6 +944,37 @@ void RE_UploadCinematic (int w, int h, int cols, int rows, const byte *data, int
 			qglTexSubImage2D( GL_TEXTURE_2D, 0, 0, 0, cols, rows, GL_RGBA, GL_UNSIGNED_BYTE, data );
 		}
 	}
+
+	#else
+
+	image_t *image = tr.scratchImage[client];
+
+	GL_Bind( image );
+
+	// if the scratchImage isn't in the format we want, specify it as a new texture
+	if ( cols != image->width || rows != image->height )
+	{
+		image->width = image->uploadWidth = cols;
+		image->height = image->uploadHeight = rows;
+		qglTexImage2D( GL_TEXTURE_2D, 0, GL_RGB8, cols, rows, 0, GL_RGBA, GL_UNSIGNED_BYTE, data );
+		//qglTexImage2D( GL_TEXTURE_2D, 0, GL_RGBA, cols, rows, 0, GL_RGBA, GL_UNSIGNED_BYTE, data );
+		qglTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
+		qglTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+		qglTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP /*_TO_EDGE*/ ); // Cowcat
+		qglTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP /*_TO_EDGE*/ ); // Cowcat	
+	}
+
+	else
+	{
+		if (dirty)
+		{
+			// otherwise, just subimage upload it so that drivers can tell we are going to be changing
+			// it and don't try and do a texture compression
+			qglTexSubImage2D( GL_TEXTURE_2D, 0, 0, 0, cols, rows, GL_RGBA, GL_UNSIGNED_BYTE, data );
+		}
+	}
+
+	#endif
 }
 
 
@@ -966,6 +1003,7 @@ const void *RB_SetColor( const void *data )
 RB_StretchPic
 =============
 */
+
 const void *RB_StretchPic ( const void *data )
 {
 	const stretchPicCommand_t	*cmd;
@@ -974,10 +1012,12 @@ const void *RB_StretchPic ( const void *data )
 
 	cmd = (const stretchPicCommand_t *)data;
 
+	#if 0
 	if ( !backEnd.projection2D )
 	{
 		RB_SetGL2D();
 	}
+	#endif
 
 	shader = cmd->shader;
 
@@ -992,6 +1032,9 @@ const void *RB_StretchPic ( const void *data )
 		RB_BeginSurface( shader, 0 );
 	}
 
+	if ( !backEnd.projection2D ) // test - quake3e - Cowcat
+		RB_SetGL2D();
+	
 	RB_CHECKOVERFLOW( 4, 6 );
 
 	numVerts = tess.numVertexes;
@@ -1042,7 +1085,6 @@ const void *RB_StretchPic ( const void *data )
 
 	return (const void *)(cmd + 1);
 }
-
 
 /*
 =============
@@ -1105,6 +1147,7 @@ was there.  This is used to test for texture thrashing.
 Also called by RE_EndRegistration
 ===============
 */
+
 void RB_ShowImages( void )
 {
 	int	i;
@@ -1152,12 +1195,11 @@ void RB_ShowImages( void )
 		qglVertex2f( x, y + h );
 		qglEnd();
 	}
-
+	
 	qglFinish();
 
 	end = ri.Milliseconds();
 	ri.Printf( PRINT_ALL, "%i msec to draw all images\n", end - start );
-
 }
 
 /*
@@ -1221,6 +1263,7 @@ const void *RB_SwapBuffers( const void *data )
 
 	cmd = (const swapBuffersCommand_t *)data;
 
+	#if 0 // Cowcat
 	// we measure overdraw by reading back the stencil buffer and
 	// counting up the number of increments that have happened
 	if ( r_measureOverdraw->integer )
@@ -1240,6 +1283,7 @@ const void *RB_SwapBuffers( const void *data )
 		backEnd.pc.c_overDraw += sum;
 		ri.Hunk_FreeTempMemory( stencilReadback );
 	}
+	#endif
 
 	if ( !glState.finishCalled )
 	{
@@ -1269,19 +1313,9 @@ void RB_ExecuteRenderCommands( const void *data )
 
 	t1 = ri.Milliseconds ();
 
-	if ( !r_smp->integer || data == backEndData[0]->commands.cmds )
-	{
-		backEnd.smpFrame = 0;
-	}
-
-	else
-	{
-		backEnd.smpFrame = 1;
-	}
-
 	while ( 1 )
 	{
-		//Com_Printf("execute %d\n", *((int*)data));
+		//data = PADP(data, sizeof(void *)); // test - Cowcat
 
 		switch ( *(const int *)data )
 		{
@@ -1323,41 +1357,12 @@ void RB_ExecuteRenderCommands( const void *data )
 
 			case RC_END_OF_LIST:
 			default:
-				// stop rendering on this thread
+				// stop rendering// on this thread
 				t2 = ri.Milliseconds ();
 				backEnd.pc.msec = t2 - t1;
 				return;
 		}
 	}
 
-}
-
-
-/*
-================
-RB_RenderThread
-================
-*/
-void RB_RenderThread( void )
-{
-	const void	*data;
-
-	// wait for either a rendering command or a quit command
-	while ( 1 )
-	{
-		// sleep until we have work to do
-		data = GLimp_RendererSleep();
-
-		if ( !data )
-		{
-			return;	// all done, renderer is shutting down
-		}
-
-		renderThreadActive = qtrue;
-
-		RB_ExecuteRenderCommands( data );
-
-		renderThreadActive = qfalse;
-	}
 }
 

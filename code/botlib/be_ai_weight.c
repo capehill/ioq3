@@ -63,14 +63,21 @@ int ReadValue(source_t *source, float *value)
 	if (!PC_ExpectAnyToken(source, &token)) return qfalse;
 	if (!strcmp(token.string, "-"))
 	{
-		SourceWarning(source, "negative value set to zero\n");
-		if (!PC_ExpectTokenType(source, TT_NUMBER, 0, &token)) return qfalse;
-	} //end if
+		SourceWarning(source, "negative value set to zero");
+
+		if(!PC_ExpectAnyToken(source, &token))
+		{
+			SourceError(source, "Missing return value");
+			return qfalse;
+		}
+	}
+
 	if (token.type != TT_NUMBER)
 	{
-		SourceError(source, "invalid return value %s\n", token.string);
+		SourceError(source, "invalid return value %s", token.string);
 		return qfalse;
-	} //end if
+	}
+	
 	*value = token.floatvalue;
 	return qtrue;
 } //end of the function ReadValue
@@ -179,7 +186,7 @@ fuzzyseperator_t *ReadFuzzySeperators_r(source_t *source)
 			{
 				if (founddefault)
 				{
-					SourceError(source, "switch already has a default\n");
+					SourceError(source, "switch already has a default");
 					FreeFuzzySeperators_r(firstfs);
 					return NULL;
 				} //end if
@@ -229,7 +236,7 @@ fuzzyseperator_t *ReadFuzzySeperators_r(source_t *source)
 			} //end else if
 			else
 			{
-				SourceError(source, "invalid name %s\n", token.string);
+				SourceError(source, "invalid name %s", token.string);
 				return NULL;
 			} //end else
 			if (newindent)
@@ -244,7 +251,7 @@ fuzzyseperator_t *ReadFuzzySeperators_r(source_t *source)
 		else
 		{
 			FreeFuzzySeperators_r(firstfs);
-			SourceError(source, "invalid name %s\n", token.string);
+			SourceError(source, "invalid name %s", token.string);
 			return NULL;
 		} //end else
 		if (!PC_ExpectAnyToken(source, &token))
@@ -256,7 +263,7 @@ fuzzyseperator_t *ReadFuzzySeperators_r(source_t *source)
 	//
 	if (!founddefault)
 	{
-		SourceWarning(source, "switch without default\n");
+		SourceWarning(source, "switch without default");
 		fs = (fuzzyseperator_t *) GetClearedMemory(sizeof(fuzzyseperator_t));
 		fs->index = index;
 		fs->value = MAX_INVENTORYVALUE;
@@ -265,7 +272,6 @@ fuzzyseperator_t *ReadFuzzySeperators_r(source_t *source)
 		fs->child = NULL;
 		if (lastfs) lastfs->next = fs;
 		else firstfs = fs;
-		lastfs = fs;
 	} //end if
 	//
 	return firstfs;
@@ -335,7 +341,7 @@ weightconfig_t *ReadWeightConfig(char *filename)
 		{
 			if (config->numweights >= MAX_WEIGHTS)
 			{
-				SourceWarning(source, "too many fuzzy weights\n");
+				SourceWarning(source, "too many fuzzy weights");
 				break;
 			} //end if
 			if (!PC_ExpectTokenType(source, TT_STRING, 0, &token))
@@ -393,7 +399,7 @@ weightconfig_t *ReadWeightConfig(char *filename)
 			} //end else if
 			else
 			{
-				SourceError(source, "invalid name %s\n", token.string);
+				SourceError(source, "invalid name %s", token.string);
 				FreeWeightConfig(config);
 				FreeSource(source);
 				return NULL;
@@ -411,7 +417,7 @@ weightconfig_t *ReadWeightConfig(char *filename)
 		} //end if
 		else
 		{
-			SourceError(source, "invalid name %s\n", token.string);
+			SourceError(source, "invalid name %s", token.string);
 			FreeWeightConfig(config);
 			FreeSource(source);
 			return NULL;
@@ -422,7 +428,7 @@ weightconfig_t *ReadWeightConfig(char *filename)
 	//if the file was located in a pak file
 	botimport.Print(PRT_MESSAGE, "loaded %s\n", filename);
 #ifdef DEBUG
-	if (bot_developer)
+	if (botDeveloper)
 	{
 		botimport.Print(PRT_MESSAGE, "weights loaded in %d msec\n", Sys_MilliSeconds() - starttime);
 	} //end if
@@ -720,7 +726,7 @@ void EvolveFuzzySeperator_r(fuzzyseperator_t *fs)
 		//every once in a while an evolution leap occurs, mutation
 		if (random() < 0.01) fs->weight += crandom() * (fs->maxweight - fs->minweight);
 		else fs->weight += crandom() * (fs->maxweight - fs->minweight) * 0.5;
-		//modify bounds if necesary because of mutation
+		//modify bounds if necessary because of mutation
 		if (fs->weight < fs->minweight) fs->minweight = fs->weight;
 		else if (fs->weight > fs->maxweight) fs->maxweight = fs->weight;
 	} //end else if

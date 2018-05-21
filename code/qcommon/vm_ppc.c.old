@@ -24,7 +24,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "vm_local.h"
 
-#ifndef __amigaos4__
+#ifndef AMIGA //__amigaos4__
 #include <sys/mman.h>
 #else
 #include <proto/exec.h>
@@ -146,17 +146,17 @@ typedef enum {
 } regNums_t;
 
 #define	RG_REAL_STACK		r1
-#define	RG_STACK			r3
-#define	RG_OPSTACK			r4
-#define	RG_MEMBASE			r5
-#define	RG_MEMMASK			r6
-#define	RG_ASMCALL			r7
+#define	RG_STACK		r3
+#define	RG_OPSTACK		r4
+#define	RG_MEMBASE		r5
+#define	RG_MEMMASK		r6
+#define	RG_ASMCALL		r7
 #define	RG_INSTRUCTIONS		r8
 #define	RG_NUM_INSTRUCTIONS	r9
-#define	RG_CVM				r10
-#define	RG_TOP				r12
-#define	RG_SECOND			r13
-#define	RG_EA 				r14
+#define	RG_CVM			r10
+#define	RG_TOP			r12
+#define	RG_SECOND		r13
+#define	RG_EA 			r14
 
 // The deepest value I saw in the Quake3 games was 9.
 #define OP_STACK_MAX_DEPTH	16
@@ -446,36 +446,40 @@ static	byte	*code;
 static	int		pc;
 
 void AsmCall( void );
+//void SaveRegsAndCall(int, int, int, int, int, int, int, int);
 
 double	itofConvert[2];
 
-static int	Constant4( void ) {
-	int		v;
+static int Constant4( void ) {
+	int	v;
 
 	v = code[pc] | (code[pc+1]<<8) | (code[pc+2]<<16) | (code[pc+3]<<24);
 	pc += 4;
 	return v;
 }
 
-static int	Constant1( void ) {
-	int		v;
+static int Constant1( void ) {
+	int	v;
 
 	v = code[pc];
 	pc += 1;
 	return v;
 }
 
-static void Emit4( char *opname, int i ) {
+static void Emit4( char *opname, int i )
+{
 	#if DEBUG_VM
 	if(pass == 1)
 		printf("\t\t\t%p %s\t%08lx\n",&buf[compiledOfs],opname,i&0x3ffffff);
 	#endif
+
 	buf[ compiledOfs ] = i;
 	compiledOfs++;
 }
 
-static void Inst( char *opname, int opcode, int destReg, int aReg, int bReg ) {
-	unsigned		r;
+static void Inst( char *opname, int opcode, int destReg, int aReg, int bReg )
+{
+	unsigned	r;
 
 	#if DEBUG_VM
 	if(pass == 1)
@@ -486,8 +490,9 @@ static void Inst( char *opname, int opcode, int destReg, int aReg, int bReg ) {
 	compiledOfs++;
 }
 
-static void Inst4( char *opname, int opcode, int destReg, int aReg, int bReg, int cReg ) {
-	unsigned		r;
+static void Inst4( char *opname, int opcode, int destReg, int aReg, int bReg, int cReg )
+{
+	unsigned	r;
 
 	#if DEBUG_VM
 	if(pass == 1)
@@ -498,8 +503,9 @@ static void Inst4( char *opname, int opcode, int destReg, int aReg, int bReg, in
 	compiledOfs++;
 }
 
-static void InstImm( char *opname, int opcode, int destReg, int aReg, int immediate ) {
-	unsigned		r;
+static void InstImm( char *opname, int opcode, int destReg, int aReg, int immediate )
+{
+	unsigned	r;
 	
 	if ( immediate > 32767 || immediate < -32768 ) {
 	    Com_Error( ERR_FATAL, "VM_Compile: immediate value %i out of range, opcode %x,%d,%d", immediate, opcode, destReg, aReg );
@@ -513,8 +519,9 @@ static void InstImm( char *opname, int opcode, int destReg, int aReg, int immedi
 	compiledOfs++;
 }
 
-static void InstImmU( char *opname, int opcode, int destReg, int aReg, int immediate ) {
-	unsigned		r;
+static void InstImmU( char *opname, int opcode, int destReg, int aReg, int immediate )
+{
+	unsigned	r;
 	
 	if ( immediate > 0xffff || immediate < 0 ) {
 		Com_Error( ERR_FATAL, "VM_Compile: immediate value %i out of range", immediate );
@@ -666,13 +673,13 @@ static void fltopandsecond() {
 VM_Compile
 =================
 */
-void VM_Compile( vm_t *vm, vmHeader_t *header ) {
+void VM_Compile( vm_t *vm, vmHeader_t *header )
+{
 	int		op;
 	int		maxLength;
 	int		v;
 	int		i;
-		int		opStackDepth;
-	
+	int		opStackDepth;
 	int		mainFunction;
 	
 	// set up the into-to-float variables
@@ -688,67 +695,81 @@ void VM_Compile( vm_t *vm, vmHeader_t *header ) {
 	
 	// compile everything twice, so the second pass will have valid instruction
 	// pointers for branches
-	for ( pass = -1 ; pass < 2 ; pass++ ) {
-
+	for ( pass = -1 ; pass < 2 ; pass++ )
+	{
 		// translate all instructions
 		pc = 0;
-	mainFunction = 0;
-	opStackDepth = 0;
+		mainFunction = 0;
+		opStackDepth = 0;
 	
-	pop0 = 343545;
-	pop1 = 2443545;
-	oc0 = -2343535;
-	oc1 = 24353454;
-	tvm = vm;
+		pop0 = 343545;
+		pop1 = 2443545;
+		oc0 = -2343535;
+		oc1 = 24353454;
+		tvm = vm;
 		code = (byte *)header + header->codeOffset;
 		compiledOfs = 0;
 #ifndef __GNUC__
 		// metrowerks seems to require this header in front of functions
-		Emit4( (int)(buf+2) );
-		Emit4( 0 );
+		//Emit4( (int)(buf+2) );
+		//Emit4( 0 );
 #endif
 
-	for ( instruction = 0 ; instruction < header->instructionCount ; instruction++ ) {
+	for ( instruction = 0 ; instruction < header->instructionCount ; instruction++ )
+	{
 			if ( compiledOfs*4 > maxLength - 16 ) {
 				Com_Error( ERR_DROP, "VM_Compile: maxLength exceeded" );
 			}
 
 			op = code[ pc ];
+
 			if ( !pass ) {
 				vm->instructionPointers[ instruction ] = compiledOfs * 4;
 			}
+
 			pc++;
-			switch ( op ) {
+
+			switch ( op )
+			{
 			case 0:
 				break;
+
 			case OP_BREAK:
-		#if DEBUG_VM
-		if(pass == 1)
-			printf("%08lx BREAK\n",instruction);
-		#endif
+
+				#if DEBUG_VM
+				if(pass == 1)
+					printf("%08lx BREAK\n",instruction);
+				#endif
+
 				InstImmU( "addi", PPC_ADDI, R_TOP, 0, 0 );
 				InstImm( "lwz", PPC_LWZ, R_TOP, R_TOP, 0 );			// *(int *)0 to crash to debugger
 				break;
+
 			case OP_ENTER:
-		opStackDepth = 0;
-		v = Constant4();
-		#if DEBUG_VM
-		if(pass == 1)
-			printf("%08x ENTER\t%04x\n",instruction,v);
-		#endif
-		opStackRegType[opStackDepth] = 0;
-		mainFunction++;
-		if(mainFunction == 1)
-		{
-			// Main VM entry point is the first thing we compile, so save off operand stack
-			// registers here.  This avoids issues with trying to trick the native compiler
-			// into doing it, and properly matches the PowerPC ABI
-			InstImm( "addi", PPC_ADDI, R_REAL_STACK, R_REAL_STACK, -OP_STACK_MAX_DEPTH*4 );	// sub R_STACK, R_STACK, imm
-			for(i = 0; i < OP_STACK_MAX_DEPTH; i++)
-				InstImm( "stw", PPC_STW, opStackIntRegisters[i], R_REAL_STACK, i*4);
-		}
+				opStackDepth = 0;
+				v = Constant4();
+
+				#if DEBUG_VM
+				if(pass == 1)
+					printf("%08x ENTER\t%04x\n",instruction,v);
+				#endif
+
+				opStackRegType[opStackDepth] = 0;
+				mainFunction++;
+
+			if(mainFunction == 1)
+			{
+				// Main VM entry point is the first thing we compile, so save off operand stack
+				// registers here.  This avoids issues with trying to trick the native compiler
+				// into doing it, and properly matches the PowerPC ABI
+				InstImm( "addi", PPC_ADDI, R_REAL_STACK, R_REAL_STACK, -OP_STACK_MAX_DEPTH*4 );	// sub R_STACK, R_STACK, imm
+
+				for(i = 0; i < OP_STACK_MAX_DEPTH; i++)
+					InstImm( "stw", PPC_STW, opStackIntRegisters[i], R_REAL_STACK, i*4);
+			}
 				InstImm( "addi", PPC_ADDI, R_STACK, R_STACK, -v );	// sub R_STACK, R_STACK, imm
 				break;
+
 			case OP_CONST:
 				v = Constant4();
 		#if DEBUG_VM
@@ -1742,7 +1763,7 @@ void VM_Compile( vm_t *vm, vmHeader_t *header ) {
 			IExec->CacheClearE(vm->codeBase, vm->codeLength, CACRF_ClearI|CACRF_ClearD);
 		#else
 		   // clear the instruction cache for generated code
-		   msync(vm->codeBase, vm->codeLength, MS_INVALIDATE);
+		   //msync(vm->codeBase, vm->codeLength, MS_INVALIDATE); // Cowcat
 		#endif
 
 	   }
@@ -1809,11 +1830,14 @@ int	VM_CallCompiled( vm_t *vm, int *args ) {
 		(int)vm->instructionPointers, vm->instructionPointersLength,
 		(int)vm );
 #else
-	((void(*)(int, int, int, int, int, int, int, int))(vm->codeBase))( 
+	((void(*)(int, int, int, int, int, int, int, int))(vm->codeBase)) ( 
 		programStack, (int)&stack, 
 		(int)image, vm->dataMask, *(int *)&AsmCall /* skip function pointer header */, 
 		(int)vm->instructionPointers, vm->instructionPointersLength,
 		(int)vm );
+
+	//SaveRegsAndCall(programStack, (int)&stack, (int)image, vm->dataMask, (int)vm->codeBase, (int)vm->instructionPointers, 
+		//vm->instructionPointersLength, (int)vm );
 #endif
 	vm->programStack = stackOnEntry;
 
@@ -1830,6 +1854,7 @@ AsmCall
 Put this at end of file because gcc messes up debug line numbers 
 ==================
 */
+#if 0
 #ifdef __GNUC__
 
 void AsmCall( void ) {
@@ -2079,7 +2104,6 @@ systemTrap:
 
 }
 
-
-
+#endif
 
 #endif

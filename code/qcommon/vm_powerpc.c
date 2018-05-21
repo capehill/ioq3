@@ -21,7 +21,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include <sys/types.h> /* needed by sys/mman.h on OSX */
-#include <sys/mman.h>
+//#include <sys/mman.h>
 #include <sys/time.h>
 #include <time.h>
 #include <stddef.h>
@@ -32,6 +32,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "vm_local.h"
 #include "vm_powerpc_asm.h"
+
+#define ARRAY_LEN(x) ( sizeof(x) / sizeof(*(x)) )
 
 /*
  * VM_TIMES enables showing information about time spent inside
@@ -45,11 +47,7 @@ static clock_t time_total_vm = 0;
 #endif
 
 /* exit() won't be called but use it because it is marked with noreturn */
-#define DIE( reason ) \
-	do { \
-		Com_Error(ERR_DROP, "vm_powerpc compiler error: " reason "\n"); \
-		exit(1); \
-	} while(0)
+#define DIE( reason ) Com_Error( ERR_DROP, "vm_powerpc compiler error: " reason )
 
 /*
  * vm_powerpc uses large quantities of memory during compilation,
@@ -58,8 +56,7 @@ static clock_t time_total_vm = 0;
 
 //#define VM_SYSTEM_MALLOC
 #ifdef VM_SYSTEM_MALLOC
-static inline void *
-PPC_Malloc( size_t size )
+static inline void *PPC_Malloc( size_t size )
 {
 	void *mem = malloc( size );
 	if ( ! mem )
@@ -271,6 +268,7 @@ static const unsigned char vm_opInfo[256] =
  * source instruction data
  */
 typedef struct source_instruction_s source_instruction_t;
+
 struct source_instruction_s {
 	// opcode
 	unsigned long int op;
@@ -311,7 +309,7 @@ typedef struct VM_Data {
 
 	// function pointers, no use to waste registers for them
 	long int (* AsmCall)( int, int );
-	void (* BlockCopy )( unsigned int, unsigned int, unsigned int );
+	void (* BlockCopy )( unsigned int, unsigned int, size_t );
 
 	// instruction pointers, rarely used so don't waste register
 	ppc_instruction_t *iPointers;
@@ -332,20 +330,23 @@ typedef struct VM_Data {
 	unsigned int data[0];
 } vm_data_t;
 
-#ifdef offsetof
-# define VM_Data_Offset( field )	offsetof( vm_data_t, field )
-#else
-# define OFFSET( structName, field ) \
-	( (void *)&(((structName *)NULL)->field) - NULL )
-# define VM_Data_Offset( field )	OFFSET( vm_data_t, field )
-#endif
+//#if defined (__VBCC__)
+#include <stddef.h>   //added Cowcat
+#define VM_Data_Offset( field )	offsetof( vm_data_t, field )
+
+//#else
+
+//#define OFFSET( structName, field ) \
+	//( (void *)&(((structName *)NULL)->field) - NULL )
+
+//#define VM_Data_Offset( field )	OFFSET( vm_data_t, field )
+//#endif
 
 
 /*
  * functions used by generated code
  */
-static long int
-VM_AsmCall( int callSyscallInvNum, int callProgramStack )
+static long int VM_AsmCall( int callSyscallInvNum, int callProgramStack )
 {
 	vm_t *savedVM = currentVM;
 	long int i, ret;
@@ -359,7 +360,8 @@ VM_AsmCall( int callSyscallInvNum, int callProgramStack )
 	currentVM->programStack = callProgramStack - 4;
 
 	// we need to convert ints to longs on 64bit powerpcs
-	if ( sizeof( intptr_t ) == sizeof( int ) ) {
+	if ( sizeof( intptr_t ) == sizeof( int ) )
+	{
 		intptr_t *argPosition = (intptr_t *)((byte *)currentVM->dataBase + callProgramStack + 4);
 
 		// generated code does not invert syscall number
@@ -367,13 +369,13 @@ VM_AsmCall( int callSyscallInvNum, int callProgramStack )
 
 		ret = currentVM->systemCall( argPosition );
 	} else {
-		intptr_t args[11];
+		intptr_t args[MAX_VMSYSCALL_ARGS];
 
 		// generated code does not invert syscall number
 		args[0] = -1 - callSyscallInvNum;
 
 		int *argPosition = (int *)((byte *)currentVM->dataBase + callProgramStack + 4);
-		for( i = 1; i < 11; i++ )
+		for( i = 1; i < ARRAY_LEN(args); i++ )
 			args[ i ] = argPosition[ i ];
 
 		ret = currentVM->systemCall( args );
@@ -388,23 +390,6 @@ VM_AsmCall( int callSyscallInvNum, int callProgramStack )
 
 	return ret;
 }
-
-static void
-VM_BlockCopy( unsigned int dest, unsigned int src, unsigned int count )
-{
-	unsigned dataMask = currentVM->dataMask;
-
-	if ( (dest & dataMask) != dest
-		|| (src & dataMask) != src
-		|| ((dest+count) & dataMask) != dest + count
-		|| ((src+count) & dataMask) != src + count)
-	{
-		DIE( "OP_BLOCK_COPY out of range!");
-	}
-
-	memcpy( currentVM->dataBase+dest, currentVM->dataBase+src, count );
-}
-
 
 /*
  * code-block descriptors
@@ -422,7 +407,7 @@ struct symbolic_jump {
 	// extensions / modifiers (branch-link)
 	unsigned long ext;
 
-	// dest_instruction refering to this jump
+	// dest_instruction referring to this jump
 	dest_instruction_t *parent;
 
 	// next jump
@@ -466,11 +451,7 @@ static dest_instruction_t **di_pointers = NULL;
 /*
  * append specified instructions at the end of instruction chain
  */
-static void
-PPC_Append(
-		dest_instruction_t *di_now,
-		unsigned long int i_count
-  	  )
+static void PPC_Append( dest_instruction_t *di_now, unsigned long int i_count)
 {
 	di_now->count = di_count++;
 	di_now->i_count = i_count;
@@ -488,15 +469,11 @@ PPC_Append(
 /*
  * make space for instructions and append
  */
-static void
-PPC_AppendInstructions(
-		unsigned long int i_count,
-		size_t num_instructions,
-		const ppc_instruction_t *is
-	)
+static void PPC_AppendInstructions( unsigned long int i_count, size_t num_instructions, const ppc_instruction_t *is )
 {
 	if ( num_instructions < 0 )
 		num_instructions = 0;
+
 	size_t iBytes = sizeof( ppc_instruction_t ) * num_instructions;
 	dest_instruction_t *di_now = PPC_Malloc( sizeof( dest_instruction_t ) + iBytes );
 
@@ -513,14 +490,8 @@ PPC_AppendInstructions(
  * create symbolic jump and append
  */
 static symbolic_jump_t *sj_first = NULL, *sj_last = NULL;
-static void
-PPC_PrepareJump(
-		unsigned long int i_count,
-		unsigned long int dest,
-		long int bo,
-		long int bi,
-		unsigned long int ext
-	)
+
+static void PPC_PrepareJump( unsigned long int i_count, unsigned long int dest, long int bo, long int bi, unsigned long int ext )
 {
 	dest_instruction_t *di_now = PPC_Malloc( sizeof( dest_instruction_t ) );
 	symbolic_jump_t *sj = PPC_Malloc( sizeof( symbolic_jump_t ) );
@@ -552,7 +523,8 @@ PPC_PrepareJump(
 
 #define pushIn( inst ) \
 	(instructions[ num_instructions++ ] = inst)
-#define in( inst, args... ) pushIn( IN( inst, args ) )
+
+#define in( inst, args, ... ) pushIn( IN( inst, args, ... ) )
 
 #define emitEnd() \
 	do{ \
@@ -573,7 +545,9 @@ PPC_PrepareJump(
  * used in cases where constant float is needed
  */
 #define LOCAL_DATA_CHUNK 50
+
 typedef struct local_data_s local_data_t;
+
 struct local_data_s {
 	// number of data in this structure
 	long int count;
@@ -593,8 +567,8 @@ static long int data_acc = 0;
 /*
  * append the data and return its offset
  */
-static size_t
-PPC_PushData( unsigned int datum )
+
+static size_t PPC_PushData( unsigned int datum )
 {
 	local_data_t *d_now = data_first;
 	long int accumulated = 0;
@@ -602,24 +576,30 @@ PPC_PushData( unsigned int datum )
 	// check whether we have this one already
 	do {
 		long int i;
-		for ( i = 0; i < d_now->count; i++ ) {
-			if ( d_now->data[ i ] == datum ) {
+
+		for ( i = 0; i < d_now->count; i++ )
+		{
+			if ( d_now->data[ i ] == datum )
+			{
 				accumulated += i;
-				return VM_Data_Offset( data[ accumulated ] );
+				//return VM_Data_Offset( data[ accumulated ] ); // Cowcat
 			}
 		}
+
 		if ( !d_now->next )
 			break;
 
 		accumulated += d_now->count;
 		d_now = d_now->next;
+
 	} while (1);
 
 	// not found, need to append
 	accumulated += d_now->count;
 
 	// last chunk is full, create new one
-	if ( d_now->count >= LOCAL_DATA_CHUNK ) {
+	if ( d_now->count >= LOCAL_DATA_CHUNK )
+	{
 		d_now->next = PPC_Malloc( sizeof( local_data_t ) );
 		d_now = d_now->next;
 		d_now->count = 0;
@@ -631,7 +611,7 @@ PPC_PushData( unsigned int datum )
 
 	data_acc = accumulated + 1;
 
-	return VM_Data_Offset( data[ accumulated ] );
+	//return VM_Data_Offset( data[ accumulated ] ); // Cowcat
 }
 
 /*
@@ -639,21 +619,26 @@ PPC_PushData( unsigned int datum )
  * "rotate and mask" instruction
  */
 static long int fastMaskHi = 0, fastMaskLo = 31;
-static void
-PPC_MakeFastMask( int mask )
+
+static void PPC_MakeFastMask( int mask )
 {
+
 #if defined( __GNUC__ ) && ( __GNUC__ >= 4 || ( __GNUC__ == 3 && __GNUC_MINOR__ >= 4 ) )
+
 	/* count leading zeros */
 	fastMaskHi = __builtin_clz( mask );
 
 	/* count trailing zeros */
 	fastMaskLo = 31 - __builtin_ctz( mask );
 #else
+
 	fastMaskHi = 0;
+
 	while ( ( mask & ( 0x80000000 >> fastMaskHi ) ) == 0 )
 		fastMaskHi++;
 
 	fastMaskLo = 31;
+
 	while ( ( mask & ( 0x80000000 >> fastMaskLo ) ) == 0 )
 		fastMaskLo--;
 #endif
@@ -677,7 +662,7 @@ PPC_MakeFastMask( int mask )
  * function local registers,
  *
  * normally only volatile registers are used, but if there aren't enough
- * or function has to preserve some value while calling annother one
+ * or function has to preserve some value while calling another one
  * then caller safe registers are used as well
  */
 static const long int gpr_list[] = {
@@ -689,8 +674,9 @@ static const long int gpr_list[] = {
 	r3, r4, r5, r6,
 	r7, r8, r9, r10,
 };
+
 static const long int gpr_vstart = 8; /* position of first volatile register */
-static const long int gpr_total = sizeof( gpr_list ) / sizeof( gpr_list[0] );
+static const long int gpr_total = ARRAY_LEN( gpr_list );
 
 static const long int fpr_list[] = {
 	/* static registers, normally none is used */
@@ -703,14 +689,14 @@ static const long int fpr_list[] = {
 	f8, f9, f10, f11,
 	f12, f13,
 };
+
 static const long int fpr_vstart = 8;
-static const long int fpr_total = sizeof( fpr_list ) / sizeof( fpr_list[0] );
+static const long int fpr_total = ARRAY_LEN( fpr_list );
 
 /*
  * prepare some dummy structures and emit init code
  */
-static void
-PPC_CompileInit( void )
+static void PPC_CompileInit( void )
 {
 	di_first = di_last = PPC_Malloc( sizeof( dest_instruction_t ) );
 	di_first->count = 0;
@@ -1837,7 +1823,7 @@ PPC_ComputeCode( vm_t *vm )
 	unsigned char *dataAndCode = mmap( NULL, codeLength,
 		PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0 );
 
-	if ( ! dataAndCode )
+	if (dataAndCode == MAP_FAILED)
 		DIE( "Not enough memory" );
 
 	ppc_instruction_t *codeNow, *codeBegin;
@@ -1982,8 +1968,6 @@ PPC_ComputeCode( vm_t *vm )
 			di_now = di_first;
 		}
 	}
-
-	return;
 }
 
 static void
@@ -2122,9 +2106,9 @@ VM_CallCompiled( vm_t *vm, int *args )
 
 	vm->currentlyInterpreting = qtrue;
 
-	programStack -= 48;
+	programStack -= ( 8 + 4 * MAX_VMMAIN_ARGS );
 	argPointer = (int *)&image[ programStack + 8 ];
-	memcpy( argPointer, args, 4 * 9 );
+	memcpy( argPointer, args, 4 * MAX_VMMAIN_ARGS );
 	argPointer[ -1 ] = 0;
 	argPointer[ -2 ] = -1;
 

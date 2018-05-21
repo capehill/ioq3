@@ -77,6 +77,7 @@ void MSG_WriteFloat (msg_t *sb, float f);
 void MSG_WriteString (msg_t *sb, const char *s);
 void MSG_WriteBigString (msg_t *sb, const char *s);
 void MSG_WriteAngle16 (msg_t *sb, float f);
+int MSG_HashKey(const char *string, int maxlen);
 
 void MSG_BeginReading (msg_t *sb);
 void MSG_BeginReadingOOB(msg_t *sb);
@@ -125,6 +126,8 @@ NET
 
 #define MAX_PACKET_USERCMDS	32	// max number of usercmd_t in a packet
 
+#define MAX_SNAPSHOT_ENTITIES	256	// new - Cowcat
+
 #define PORT_ANY		-1
 
 #define MAX_RELIABLE_COMMANDS	64	// max string commands buffered for restransmit
@@ -157,6 +160,7 @@ typedef struct {
 
 	unsigned short	port;
 	unsigned long	scope_id;	// Needed for IPv6 link-local addresses
+
 } netadr_t;
 
 void		NET_Init( void );
@@ -215,6 +219,8 @@ typedef struct {
 	int		unsentLength;
 	byte		unsentBuffer[MAX_MSGLEN];
 
+	qboolean	isLANAddress; // quake3e - Cowcat
+
 } netchan_t;
 
 void Netchan_Init( int qport );
@@ -253,20 +259,20 @@ extern int demo_protocols[];
 #endif
 
 #ifndef STANDALONE
-  #ifndef AUTHORIZE_SERVER_NAME
-	#define AUTHORIZE_SERVER_NAME	"authorize.quake3arena.com"
-  #endif
-  #ifndef PORT_AUTHORIZE
-  #define	PORT_AUTHORIZE		27952
-  #endif
+#ifndef AUTHORIZE_SERVER_NAME
+#define AUTHORIZE_SERVER_NAME	"authorize.quake3arena.com"
+#endif
+#ifndef PORT_AUTHORIZE
+#define	PORT_AUTHORIZE		27952
+#endif
 #endif
 
-#define PORT_MASTER			27950
-#define PORT_UPDATE			27951
-#define PORT_SERVER			27960
-#define NUM_SERVER_PORTS		4		// broadcast scan this many ports after
-							// PORT_SERVER so a single machine can
-							// run multiple servers
+#define PORT_MASTER		27950
+#define PORT_UPDATE		27951
+#define PORT_SERVER		27960
+#define NUM_SERVER_PORTS	4	// broadcast scan this many ports after
+					// PORT_SERVER so a single machine can
+					// run multiple servers
 
 
 // the svc_strings[] array in cl_parse.c should mirror this
@@ -471,7 +477,7 @@ or displayed at the console or prog code as well as accessed directly
 in C code.
 
 The user can access cvars from the console in three ways:
-r_draworder			prints the current value
+r_draworder		prints the current value
 r_draworder 0		sets the current value to 0
 set r_draworder 0	as above, but creates the cvar if not present
 
@@ -800,7 +806,7 @@ void		Com_Quit_f( void );
 int		Com_Milliseconds( void );	// will be journaled properly
 unsigned	Com_BlockChecksum( const void *buffer, int length );
 char		*Com_MD5File(const char *filename, int length, const char *prefix, int prefix_len);
-int		Com_HashKey(char *string, int maxlen);
+//int		Com_HashKey(char *string, int maxlen);
 int		Com_Filter(char *filter, char *name, int casesensitive);
 int		Com_FilterPath(char *filter, char *name, int casesensitive);
 int		Com_RealTime(qtime_t *qtime);
@@ -1142,9 +1148,9 @@ void	Huff_Decompress(msg_t *buf, int offset);
 void	Huff_Init(huffman_t *huff);
 void	Huff_addRef(huff_t* huff, byte ch);
 int	Huff_Receive (node_t *node, int *ch, byte *fin);
-void	Huff_transmit (huff_t *huff, int ch, byte *fout, int maxoffset);		// maxoffset new ioq3 - Cowcat
-void	Huff_offsetReceive (node_t *node, int *ch, byte *fin, int *offset, int maxoffset); //
-void	Huff_offsetTransmit (huff_t *huff, int ch, byte *fout, int *offset, int maxoffset); //
+void	Huff_transmit (huff_t *huff, int ch, byte *fout, int maxoffset);
+void	Huff_offsetReceive (node_t *node, int *ch, byte *fin, int *offset, int maxoffset);
+void	Huff_offsetTransmit (huff_t *huff, int ch, byte *fout, int *offset, int maxoffset);
 void	Huff_putBit( int bit, byte *fout, int *offset);
 int	Huff_getBit( byte *fout, int *offset);
 

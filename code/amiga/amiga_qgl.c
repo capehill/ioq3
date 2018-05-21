@@ -26,6 +26,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include <proto/exec.h>
 #include <mgl/gl.h>
 
+#if 0
 //struct MiniGLIFace *IMiniGL = 0;
 //struct Library *MiniGLBase = 0;
 
@@ -59,15 +60,17 @@ void MiniGL_Term(void)
 	}
 	*/
 }
-
+#endif
 
 void QGL_Shutdown(void)
 {
-	MiniGL_Term();
+	//MiniGL_Term();
+	MGLTerm();
 }
 
 
 void QGL_Init(const char *name)
 {
-	MiniGL_Init();
+	//MiniGL_Init();
+	MGLInit();
 }

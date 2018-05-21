@@ -79,8 +79,8 @@ RB_AddQuadStampExt
 */
 void RB_AddQuadStampExt( vec3_t origin, vec3_t left, vec3_t up, byte *color, float s1, float t1, float s2, float t2 )
 {
-	vec3_t		normal;
-	int		ndx;
+	vec3_t	normal;
+	int	ndx;
 
 	RB_CHECKOVERFLOW( 4, 6 );
 
@@ -110,7 +110,6 @@ void RB_AddQuadStampExt( vec3_t origin, vec3_t left, vec3_t up, byte *color, flo
 	tess.xyz[ndx+3][0] = origin[0] + left[0] - up[0];
 	tess.xyz[ndx+3][1] = origin[1] + left[1] - up[1];
 	tess.xyz[ndx+3][2] = origin[2] + left[2] - up[2];
-
 
 	// constant normal all the way around
 	VectorSubtract( vec3_origin, backEnd.viewParms.or.axis[0], normal );
@@ -250,7 +249,9 @@ static void RB_SurfaceTriangles( srfTriangles_t *srf )
 	int		dlightBits;
 	qboolean	needsNormal;
 
-	dlightBits = srf->dlightBits[backEnd.smpFrame];
+	//RB_CHECKOVERFLOW( srf->numVerts, srf->numIndexes ); // test here - Cowcat
+
+	dlightBits = srf->dlightBits;
 	tess.dlightBits |= dlightBits;
 
 	RB_CHECKOVERFLOW( srf->numVerts, srf->numIndexes );
@@ -308,6 +309,7 @@ static void RB_SurfaceTriangles( srfTriangles_t *srf )
 RB_SurfaceBeam
 ==============
 */
+
 static void RB_SurfaceBeam( void )
 {
 	#define NUM_BEAM_SEGS 6
@@ -362,6 +364,7 @@ static void RB_SurfaceBeam( void )
 	}
 
 	qglEnd();
+
 }
 
 //================================================================================
@@ -372,7 +375,7 @@ static void DoRailCore( const vec3_t start, const vec3_t end, const vec3_t up, f
 	int	vbase;
 	float	t = len / 256.0f;
 
-	RB_CHECKOVERFLOW( 4, 6 ); // was missing ! - new ioq3 - Cowcat
+	RB_CHECKOVERFLOW( 4, 6 );
 
 	vbase = tess.numVertexes;
 
@@ -396,7 +399,6 @@ static void DoRailCore( const vec3_t start, const vec3_t end, const vec3_t up, f
 	tess.numVertexes++;
 
 	VectorMA( end, spanWidth, up, tess.xyz[tess.numVertexes] );
-
 	tess.texCoords[tess.numVertexes][0][0] = t;
 	tess.texCoords[tess.numVertexes][0][1] = 0;
 	tess.vertexColors[tess.numVertexes][0] = backEnd.currentEntity->e.shaderRGBA[0];
@@ -593,9 +595,22 @@ static void RB_SurfaceLightningBolt( void )
 * This means that we don't have to worry about zero length or enormously long vectors.
 */
 
-#if defined(AMIGA) && defined(__PPC__) // Cowcat 
+#if 1
+#if defined(AMIGA) && defined(__PPC__) // Cowcat
+
 float __asm_frsqrte(__reg("f1") float) = "\tfrsqrte\t1,1";
 #define __frsqrte(x) __asm_frsqrte(x)
+
+float __rsqrt(__reg("f1") float, __reg("f5") float) =
+	"\tfrsqrte\t0,1\n"
+	"\tfmsubs\t2,5,1,1\n"										
+	"\tfmuls\t4,0,0\n"		
+	"\tfnmsubs\t3,2,4,5\n"	
+	"\tfmuls\t1,3,0";
+
+#define rsqrt(x) __rsqrt(x , 1.5f)
+
+#endif
 #endif
 
 static void VectorArrayNormalize(vec4_t *normals, unsigned int count)
@@ -603,7 +618,7 @@ static void VectorArrayNormalize(vec4_t *normals, unsigned int count)
 	//    assert(count);
         
 	//#if idppc
-	#if defined(AMIGA) && defined(__PPC__) // Cowcat - could be better for 603e PPC
+	#if defined(AMIGA) && defined(__PPC__) // Cowcat
     	{
         	float half = 0.5;
         	float one  = 1.0;
@@ -626,6 +641,8 @@ static void VectorArrayNormalize(vec4_t *normals, unsigned int count)
             		components += 4;
 
             		B = x*x + y*y + z*z;
+			
+			#if 1
 
 		#ifdef __GNUC__            
             		asm("frsqrte %0,%1" : "=f" (y0) : "f" (B));
@@ -634,6 +651,12 @@ static void VectorArrayNormalize(vec4_t *normals, unsigned int count)
 		#endif
 
             		y1 = y0 + half * y0 * (one - B * y0 * y0);
+
+			#else // Cowcat
+
+			y1 = rsqrt( B );
+			
+			#endif
 
             		x = x * y1;
             		y = y * y1;
@@ -670,16 +693,15 @@ static void LerpMeshVertexes_altivec(md3Surface_t *surf, float backlerp)
 	float	oldXyzScale ALIGN(16);
 	float   newXyzScale ALIGN(16);
 	float	oldNormalScale ALIGN(16);
-	float newNormalScale ALIGN(16);
-	int		vertNum;
+	float	newNormalScale ALIGN(16);
+	int	vertNum;
 	unsigned lat, lng;
-	int		numVerts;
+	int	numVerts;
 
 	outXyz = tess.xyz[tess.numVertexes];
 	outNormal = tess.normal[tess.numVertexes];
 
-	newXyz = (short *)((byte *)surf + surf->ofsXyzNormals)
-		+ (backEnd.currentEntity->e.frame * surf->numVerts * 4);
+	newXyz = (short *)((byte *)surf + surf->ofsXyzNormals) + (backEnd.currentEntity->e.frame * surf->numVerts * 4);
 	newNormals = newXyz + 3;
 
 	newXyzScale = MD3_XYZ_SCALE * (1.0 - backlerp);
@@ -687,7 +709,8 @@ static void LerpMeshVertexes_altivec(md3Surface_t *surf, float backlerp)
 
 	numVerts = surf->numVerts;
 
-	if ( backlerp == 0 ) {
+	if ( backlerp == 0 )
+	{
 		vector signed short newNormalsVec0;
 		vector signed short newNormalsVec1;
 		vector signed int newNormalsIntVec;
@@ -707,9 +730,7 @@ static void LerpMeshVertexes_altivec(md3Surface_t *surf, float backlerp)
 		//
 		// just copy the vertexes
 		//
-		for (vertNum=0 ; vertNum < numVerts ; vertNum++,
-			newXyz += 4, newNormals += 4,
-			outXyz += 4, outNormal += 4) 
+		for (vertNum=0 ; vertNum < numVerts ; vertNum++, newXyz += 4, newNormals += 4, outXyz += 4, outNormal += 4) 
 		{
 			newNormalsLoadPermute = vec_lvsl(0,newXyz);
 			newNormalsStorePermute = vec_lvsr(0,outXyz);
@@ -741,19 +762,20 @@ static void LerpMeshVertexes_altivec(md3Surface_t *surf, float backlerp)
 			vec_ste(newNormalsFloatVec,4,outXyz);
 			vec_ste(newNormalsFloatVec,8,outXyz);
 		}
-	} else {
+	}
+
+	else
+	{
 		//
 		// interpolate and copy the vertex and normal
 		//
-		oldXyz = (short *)((byte *)surf + surf->ofsXyzNormals)
-			+ (backEnd.currentEntity->e.oldframe * surf->numVerts * 4);
+		oldXyz = (short *)((byte *)surf + surf->ofsXyzNormals) + (backEnd.currentEntity->e.oldframe * surf->numVerts * 4);
 		oldNormals = oldXyz + 3;
 
 		oldXyzScale = MD3_XYZ_SCALE * backlerp;
 		oldNormalScale = backlerp;
 
-		for (vertNum=0 ; vertNum < numVerts ; vertNum++,
-			oldXyz += 4, newXyz += 4, oldNormals += 4, newNormals += 4,
+		for (vertNum=0 ; vertNum < numVerts ; vertNum++, oldXyz += 4, newXyz += 4, oldNormals += 4, newNormals += 4,
 			outXyz += 4, outNormal += 4) 
 		{
 			vec3_t uncompressedOldNormal, uncompressedNewNormal;
@@ -787,7 +809,8 @@ static void LerpMeshVertexes_altivec(md3Surface_t *surf, float backlerp)
 
 //			VectorNormalize (outNormal);
 		}
-    	VectorArrayNormalize((vec4_t *)tess.normal[tess.numVertexes], numVerts);
+
+    		VectorArrayNormalize((vec4_t *)tess.normal[tess.numVertexes], numVerts);
    	}
 }
 #endif
@@ -968,7 +991,8 @@ RB_SurfaceFace
 static void RB_SurfaceFace( srfSurfaceFace_t *surf )
 {
 	int		i;
-	unsigned	*indices, *tessIndexes;
+	unsigned	*indices;
+	glIndex_t	*tessIndexes;
 	float		*v;
 	float		*normal;
 	int		ndx;
@@ -978,7 +1002,7 @@ static void RB_SurfaceFace( srfSurfaceFace_t *surf )
 
 	RB_CHECKOVERFLOW( surf->numPoints, surf->numIndices );
 
-	dlightBits = surf->dlightBits[backEnd.smpFrame];
+	dlightBits = surf->dlightBits;
 	tess.dlightBits |= dlightBits;
 
 	indices = ( unsigned * ) ( ( ( char  * ) surf ) + surf->ofsIndices );
@@ -992,9 +1016,6 @@ static void RB_SurfaceFace( srfSurfaceFace_t *surf )
 	}
 
 	tess.numIndexes += surf->numIndices;
-
-	//v = surf->points[0];	// Cowcat
-	//ndx = tess.numVertexes; //
 
 	numPoints = surf->numPoints;
 
@@ -1085,7 +1106,7 @@ static void RB_SurfaceGrid( srfGridMesh_t *cv )
 	int		*vDlightBits;
 	qboolean	needsNormal;
 
-	dlightBits = cv->dlightBits[backEnd.smpFrame];
+	dlightBits = cv->dlightBits;
 	tess.dlightBits |= dlightBits;
 
 	// determine the allowable discrepance
@@ -1127,7 +1148,6 @@ static void RB_SurfaceGrid( srfGridMesh_t *cv )
 	// in the tess structure, so we may have to issue it in multiple passes
 
 	used = 0;
-	rows = 0;
 
 	while ( used < lodHeight - 1 )
 	{
@@ -1259,11 +1279,27 @@ RB_SurfaceAxis
 Draws x/y/z lines from the origin for orientation debugging
 ===================
 */
-static void RB_SurfaceAxis( void )
+
+/*
+static int SurfAxis[27] = {
+		1,0,0, 0,0,0, 16,0,0, 
+		0,1,0, 0,0,0, 0,16,0,
+		0,0,1, 0,0,0, 0,0,16 };
+*/
+
+void RB_SurfaceAxis( void )
 {
+	int 	i;
+	vec3_t 	v[3];
+
+	
 	GL_Bind( tr.whiteImage );
+
 	//qglLineWidth( 3 ); // Cowcat
 	qglBegin( GL_LINES );
+	
+	#if 1
+
 	qglColor3f( 1,0,0 );
 	qglVertex3f( 0,0,0 );
 	qglVertex3f( 16,0,0 );
@@ -1273,6 +1309,35 @@ static void RB_SurfaceAxis( void )
 	qglColor3f( 0,0,1 );
 	qglVertex3f( 0,0,0 );
 	qglVertex3f( 0,0,16 );
+
+	#else // Cowcat
+
+	int j = 0;
+
+	//for (i = 0; i < 3; i++)
+	{
+		qglColor3fv( v[SurfAxis[j]] );
+		qglVertex3fv( v[SurfAxis[j + 3]] );
+		qglVertex3fv( v[SurfAxis[j + 6]] );
+
+		j += 9;
+
+		//qglColor3fv( v[SurfAxis[0]]);
+		//qglVertex3fv( v[SurfAxis[3]] );
+		//qglVertex3fv( v[SurfAxis[6]] );
+
+		//qglColor3fv( v[SurfAxis[9]] );
+		//qglVertex3fv( v[SurfAxis[12]] );
+		//qglVertex3fv( v[SurfAxis[15]] );
+
+		//qglColor3fv( v[SurfAxis[18]] );
+		//qglVertex3fv( v[SurfAxis[21]] );
+		//qglVertex3fv( v[SurfAxis[24]] );
+
+	}
+
+	#endif
+
 	qglEnd();
 	//qglLineWidth( 1 ); // Cowcat
 }
@@ -1315,7 +1380,6 @@ static void RB_SurfaceEntity( surfaceType_t *surfType )
 			break;
 	}
 
-	return;
 }
 
 static void RB_SurfaceBad( surfaceType_t *surfType )
@@ -1329,19 +1393,9 @@ static void RB_SurfaceFlare(srfFlare_t *surf)
 		RB_AddFlare(surf, tess.fogNum, surf->origin, surf->color, surf->normal);
 }
 
-#if 0 // not in new ioq3 - Cowcat
-void RB_SurfaceDisplayList( srfDisplayList_t *surf )
-{
-	// all apropriate state must be set in RB_BeginSurface
-	// this isn't implemented yet...
-	qglCallList( surf->listNum );
-}
-#endif
-
 static void RB_SurfaceSkip( void *surf )
 {
 }
-
 
 void (*rb_surfaceTable[SF_NUM_SURFACE_TYPES])( void *) = {
 	(void(*)(void*))RB_SurfaceBad,			// SF_BAD, 
@@ -1352,10 +1406,10 @@ void (*rb_surfaceTable[SF_NUM_SURFACE_TYPES])( void *) = {
 	(void(*)(void*))RB_SurfacePolychain,		// SF_POLY,
 	(void(*)(void*))RB_SurfaceMesh,			// SF_MD3,
 	(void(*)(void*))RB_SurfaceAnim,			// SF_MD4,
-#ifdef RAVENMD4
+  #ifdef RAVENMD4
 	(void(*)(void*))RB_MDRSurfaceAnim,		// SF_MDR,
-#endif
+  #endif
 	(void(*)(void*))RB_SurfaceFlare,		// SF_FLARE,
 	(void(*)(void*))RB_SurfaceEntity,		// SF_ENTITY
-	//(void(*)(void*))RB_SurfaceDisplayList		// SF_DISPLAY_LIST // not in new ioq3 - Cowcat
 };
+

@@ -37,7 +37,6 @@ static float s_flipMatrix[16] =
 	0, 0, 0, 1
 };
 
-
 refimport_t	ri;
 
 // entities that will have procedurally generated surfaces will just
@@ -97,7 +96,7 @@ int R_CullLocalBox (vec3_t bounds[2])
 
 				if ( back )
 				{
-					break;		// a point is in front
+					break;	// a point is in front
 				}
 			}
 
@@ -222,6 +221,7 @@ R_TransformModelToClip
 
 ==========================
 */
+
 void R_TransformModelToClip( const vec3_t src, const float *modelMatrix, const float *projectionMatrix, vec4_t eye, vec4_t dst )
 {
 	int i;
@@ -272,12 +272,35 @@ myGlMultMatrix
 
 ==========================
 */
+
+#if 1
 void myGlMultMatrix( const float *a, const float *b, float *out )
 {
 	int	i, j;
 
+	#if 0
+	float b00 = b[0*4+0];
+	float b01 = b[0*4+1];
+	float b02 = b[0*4+2];
+	float b03 = b[0*4+3];
+	float b10 = b[1*4+0];
+	float b11 = b[1*4+1];
+	float b12 = b[1*4+2];
+	float b13 = b[1*4+3];
+	float b20 = b[2*4+0];
+	float b21 = b[2*4+1];
+	float b22 = b[2*4+2];
+	float b23 = b[2*4+3];
+	float b30 = b[3*4+0];
+	float b31 = b[3*4+1];
+	float b32 = b[3*4+2];
+	float b33 = b[3*4+3];
+	#endif
+
 	for ( i = 0 ; i < 4 ; i++ )
 	{
+		#if 1
+
 		for ( j = 0 ; j < 4 ; j++ )
 		{
 			out[ i * 4 + j ] =
@@ -286,8 +309,62 @@ void myGlMultMatrix( const float *a, const float *b, float *out )
 				+ a [ i * 4 + 2 ] * b [ 2 * 4 + j ]
 				+ a [ i * 4 + 3 ] * b [ 3 * 4 + j ];
 		}
+
+		#else
+
+		//out[i*4+0] = a[i*4+0]*b[0*4+0] + a[i*4+1]*b[1*4+0] + a[i*4+2]*b[2*4+0]; //+ a[i*4+3]*b[3*4+0];
+		//out[i*4+1] = a[i*4+0]*b[0*4+1] + a[i*4+1]*b[1*4+1] + a[i*4+2]*b[2*4+1]; //+ a[i*4+3]*b[3*4+1];
+		//out[i*4+2] = a[i*4+0]*b[0*4+2] + a[i*4+1]*b[1*4+2] + a[i*4+2]*b[2*4+2]; //+ a[i*4+3]*b[3*4+2];
+		//out[i*4+3] = a[i*4+0]*b[0*4+3] + a[i*4+1]*b[1*4+3] + a[i*4+2]*b[2*4+3]; //+ a[i*4+3]*b[3*4+3];
+
+		out[i*4+0] = a[i*4+0]*b00 + a[i*4+1]*b10 + a[i*4+2]*b20; //+ a[i*4+3]*b[3*4+0];
+		out[i*4+1] = a[i*4+0]*b01 + a[i*4+1]*b11 + a[i*4+2]*b21; //+ a[i*4+3]*b[3*4+1];
+		out[i*4+2] = a[i*4+0]*b02 + a[i*4+1]*b12 + a[i*4+2]*b22; //+ a[i*4+3]*b[3*4+2];
+		out[i*4+3] = a[i*4+0]*b03 + a[i*4+1]*b13 + a[i*4+2]*b23; //+ a[i*4+3]*b[3*4+3];
+
+		#endif
+		
 	}
+
+	#if 0
+	//out[3*4+0] += b[3*4+0];
+	//out[3*4+1] += b[3*4+1];
+	//out[3*4+2] += b[3*4+2];
+	//out[3*4+3] += b[3*4+3];
+	out[3*4+0] += b30;
+	out[3*4+1] += b31;
+	out[3*4+2] += b32;
+	out[3*4+3] += b33;
+	#endif
 }
+
+#else // test - Cowcat
+
+//extern void myGlMultMatrix( const float *a, const float *b, float *out );
+void myGlMultMatrix( const float a[16], const float b[16], float out[16] )
+{
+	out[0*4+0] = a[0*4+0] * b[0*4+0] + a[0*4+1] * b[1*4+0] + a[0*4+2] * b[2*4+0] /*+  a[0*4+3] * b[3*4+0] */;
+	out[0*4+1] = a[0*4+0] * b[0*4+1] + a[0*4+1] * b[1*4+1] + a[0*4+2] * b[2*4+1] /*+  a[0*4+3] * b[3*4+1] */;
+	out[0*4+2] = a[0*4+0] * b[0*4+2] + a[0*4+1] * b[1*4+2] + a[0*4+2] * b[2*4+2] /*+  a[0*4+3] * b[3*4+2] */;
+	out[0*4+3] = a[0*4+0] * b[0*4+3] + a[0*4+1] * b[1*4+3] + a[0*4+2] * b[2*4+3] /*+  a[0*4+3] * b[3*4+3] */;
+
+	out[1*4+0] = a[1*4+0] * b[0*4+0] + a[1*4+1] * b[1*4+0] + a[1*4+2] * b[2*4+0] /*+  a[1*4+3] * b[3*4+0] */;
+	out[1*4+1] = a[1*4+0] * b[0*4+1] + a[1*4+1] * b[1*4+1] + a[1*4+2] * b[2*4+1] /*+  a[1*4+3] * b[3*4+1] */;
+	out[1*4+2] = a[1*4+0] * b[0*4+2] + a[1*4+1] * b[1*4+2] + a[1*4+2] * b[2*4+2] /*+  a[1*4+3] * b[3*4+2] */;
+	out[1*4+3] = a[1*4+0] * b[0*4+3] + a[1*4+1] * b[1*4+3] + a[1*4+2] * b[2*4+3] /*+  a[1*4+3] * b[3*4+3] */;
+
+	out[2*4+0] = a[2*4+0] * b[0*4+0] + a[2*4+1] * b[1*4+0] + a[2*4+2] * b[2*4+0] /*+  a[2*4+3] * b[3*4+0] */;
+	out[2*4+1] = a[2*4+0] * b[0*4+1] + a[2*4+1] * b[1*4+1] + a[2*4+2] * b[2*4+1] /*+  a[2*4+3] * b[3*4+1] */;
+	out[2*4+2] = a[2*4+0] * b[0*4+2] + a[2*4+1] * b[1*4+2] + a[2*4+2] * b[2*4+2] /*+  a[2*4+3] * b[3*4+2] */;
+	out[2*4+3] = a[2*4+0] * b[0*4+3] + a[2*4+1] * b[1*4+3] + a[2*4+2] * b[2*4+3] /*+  a[2*4+3] * b[3*4+3] */;
+
+	out[3*4+0] = a[3*4+0] * b[0*4+0] + a[3*4+1] * b[1*4+0] + a[3*4+2] * b[2*4+0] +  /*a[3*4+3] */ b[3*4+0];
+	out[3*4+1] = a[3*4+0] * b[0*4+1] + a[3*4+1] * b[1*4+1] + a[3*4+2] * b[2*4+1] +  /*a[3*4+3] */ b[3*4+1];
+	out[3*4+2] = a[3*4+0] * b[0*4+2] + a[3*4+1] * b[1*4+2] + a[3*4+2] * b[2*4+2] +  /*a[3*4+3] */ b[3*4+2];
+	out[3*4+3] = a[3*4+0] * b[0*4+3] + a[3*4+1] * b[1*4+3] + a[3*4+2] * b[2*4+3] +  /*a[3*4+3] */ b[3*4+3];
+}
+
+#endif
 
 /*
 =================
@@ -414,7 +491,6 @@ void R_RotateForViewer (void)
 	myGlMultMatrix( viewerMatrix, s_flipMatrix, tr.or.modelMatrix );
 
 	tr.viewParms.world = tr.or;
-
 }
 
 /*
@@ -501,7 +577,7 @@ void R_SetupFrustum (viewParms_t *dest, float xmin, float xmax, float ymax, floa
 	float	oppleg, adjleg, length;
 	int	i;
 	
-	if(stereoSep == 0 && xmin != -xmax)
+	if(stereoSep == 0 && xmin == -xmax)
 	{
 		// symmetric case can be simplified
 		VectorCopy(dest->or.origin, ofsorigin);
@@ -575,10 +651,10 @@ void R_SetupProjection(viewParms_t *dest, float zProj, qboolean computeFrustum)
 	if(stereoSep != 0)
 	{
 		if(dest->stereoFrame == STEREO_LEFT)
-			stereoSep = zProj / r_stereoSeparation->value;
+			stereoSep = zProj / stereoSep;
 
 		else if(dest->stereoFrame == STEREO_RIGHT)
-			stereoSep = zProj / -r_stereoSeparation->value;
+			stereoSep = zProj / -stereoSep;
 
 		else
 			stereoSep = 0;
@@ -638,6 +714,7 @@ void R_SetupProjection(viewParms_t *dest, float zProj, qboolean computeFrustum)
 		R_SetupFrustum(dest, xmin, xmax, ymax, zProj, stereoSep);
 }
 
+
 /*
 ===============
 R_SetupProjectionZ
@@ -656,8 +733,10 @@ void R_SetupProjectionZ(viewParms_t *dest)
 
 	dest->projectionMatrix[2] = 0;
 	dest->projectionMatrix[6] = 0;
-	dest->projectionMatrix[10] = -( zFar + zNear ) * depth; // / depth
-	dest->projectionMatrix[14] = -2 * zFar * zNear * depth; // / depth
+	dest->projectionMatrix[10] = -( zFar + zNear ) * depth; // 
+	dest->projectionMatrix[14] = -2 * zFar * zNear * depth; //
+	//dest->projectionMatrix[10] = -( zFar + zNear ) / depth;
+	//dest->projectionMatrix[14] = -2 * zFar * zNear / depth;
 }
 
 /*
@@ -922,11 +1001,6 @@ static qboolean IsMirror( const drawSurf_t *drawSurf, int entityNum )
 		originalPlane.dist = originalPlane.dist + DotProduct( originalPlane.normal, tr.or.origin );
 	} 
 
-	else 
-	{
-		plane = originalPlane;
-	}
-
 	// locate the portal entity closest to this plane.
 	// origin will be the origin of the portal, origin2 will be
 	// the origin of the camera
@@ -976,11 +1050,6 @@ static qboolean SurfIsOffscreen( const drawSurf_t *drawSurf, vec4_t clipDest[128
 	unsigned int	pointOr = 0;
 	unsigned int	pointAnd = (unsigned int)~0;
 
-	if ( glConfig.smpActive )
-	{	// FIXME!  we can't do RB_BeginSurface/RB_EndSurface stuff with smp!
-		return qfalse;
-	}
-
 	R_RotateForViewer();
 
 	R_DecomposeSort( drawSurf->sort, &entityNum, &shader, &fogNum, &dlighted );
@@ -991,8 +1060,8 @@ static qboolean SurfIsOffscreen( const drawSurf_t *drawSurf, vec4_t clipDest[128
 
 	for ( i = 0; i < tess.numVertexes; i++ )
 	{
-		int j;
-		unsigned int pointFlags = 0;
+		int 		j;
+		unsigned int 	pointFlags = 0;
 
 		R_TransformModelToClip( tess.xyz[i], tr.or.modelMatrix, tr.viewParms.projectionMatrix, eye, clip );
 
@@ -1029,7 +1098,6 @@ static qboolean SurfIsOffscreen( const drawSurf_t *drawSurf, vec4_t clipDest[128
 	for ( i = 0; i < tess.numIndexes; i += 3 )
 	{
 		vec3_t 	normal;
-		float 	dot;
 		float 	len;
 
 		VectorSubtract( tess.xyz[tess.indexes[i]], tr.viewParms.or.origin, normal );
@@ -1041,7 +1109,7 @@ static qboolean SurfIsOffscreen( const drawSurf_t *drawSurf, vec4_t clipDest[128
 			shortest = len;
 		}
 
-		if ( ( dot = DotProduct( normal, tess.normal[tess.indexes[i]] ) ) >= 0 )
+		if ( DotProduct( normal, tess.normal[tess.indexes[i]] ) >= 0 )
 		{
 			numTriangles--;
 		}
@@ -1088,7 +1156,7 @@ qboolean R_MirrorViewBySurface (drawSurf_t *drawSurf, int entityNum)
 		return qfalse;
 	}
 
-	if ( r_noportals->integer || (r_fastsky->integer == 1) )
+	if ( r_noportals->integer /* || (r_fastsky->integer == 1) */) // Cowcat
 	{
 		return qfalse;
 	}
@@ -1121,8 +1189,30 @@ qboolean R_MirrorViewBySurface (drawSurf_t *drawSurf, int entityNum)
 
 	// OPTIMIZE: restrict the viewport on the mirrored view
 
+	#if 1 // fix for mirror view - ripped from Android port - Cowcat
+
+	float plane[4];
+	float oldval = r_znear->value;
+
+	plane[0] = newParms.portalPlane.normal[0];
+	plane[1] = newParms.portalPlane.normal[1];
+	plane[2] = newParms.portalPlane.normal[2];
+	plane[3] = newParms.portalPlane.dist;
+
+	float plane2[4];
+	plane2[0] = DotProduct (newParms.or.axis[0], plane);
+	plane2[1] = DotProduct (newParms.or.axis[1], plane);
+	plane2[2] = DotProduct (newParms.or.axis[2], plane);
+	plane2[3] = DotProduct (plane, newParms.or.origin) - plane[3];
+
+	r_znear->value = -plane2[3]/sqrt(plane2[0]*plane2[0]+plane2[1]*plane2[1]+plane2[2]*plane2[0]);
+
+	#endif
+
 	// render the mirror view
 	R_RenderView (&newParms);
+
+	r_znear->value = oldval; // end fix - Cowcat
 
 	tr.viewParms = oldParms;
 
@@ -1142,6 +1232,11 @@ int R_SpriteFogNum( trRefEntity_t *ent )
 	fog_t	*fog;
 
 	if ( tr.refdef.rdflags & RDF_NOWORLDMODEL )
+	{
+		return 0;
+	}
+
+	if ( ent->e.renderfx & RF_CROSSHAIR )
 	{
 		return 0;
 	}
@@ -1171,6 +1266,7 @@ int R_SpriteFogNum( trRefEntity_t *ent )
 
 	return 0;
 }
+
 
 /*
 ==========================================================================================
@@ -1236,6 +1332,7 @@ static void R_RadixSort( drawSurf_t *source, int size )
 
 //==========================================================================================
 
+
 /*
 =================
 R_AddDrawSurf
@@ -1265,7 +1362,7 @@ void R_DecomposeSort( unsigned sort, int *entityNum, shader_t **shader, int *fog
 {
 	*fogNum = ( sort >> QSORT_FOGNUM_SHIFT ) & 31;
 	*shader = tr.sortedShaders[ ( sort >> QSORT_SHADERNUM_SHIFT ) & (MAX_SHADERS-1) ];
-	*entityNum = ( sort >> QSORT_ENTITYNUM_SHIFT ) & 1023;
+	*entityNum = ( sort >> QSORT_ENTITYNUM_SHIFT ) & MAX_ENTITIES; //- TEST Cowcat
 	*dlightMap = sort & 3;
 }
 
@@ -1288,14 +1385,6 @@ void R_SortDrawSurfs( drawSurf_t *drawSurfs, int numDrawSurfs )
 		// we still need to add it for hyperspace cases
 		R_AddDrawSurfCmd( drawSurfs, numDrawSurfs );
 		return;
-	}
-
-	// if we overflowed MAX_DRAWSURFS, the drawsurfs
-	// wrapped around in the buffer and we will be missing
-	// the first surfaces, not the last ones
-	if ( numDrawSurfs > MAX_DRAWSURFS )
-	{
-		numDrawSurfs = MAX_DRAWSURFS;
 	}
 
 	// sort the drawsurfs by sort type, then orientation, then shader
@@ -1429,7 +1518,6 @@ void R_AddEntitySurfaces (void)
 								break;
 							}
 
-							shader = R_GetShaderByHandle( ent->e.customShader );
 							R_AddDrawSurf( &entitySurface, tr.defaultShader, 0, 0 );
 							break;
 
@@ -1499,17 +1587,25 @@ void R_DebugPolygon( int color, int numPoints, float *points )
 	qglEnd();
 
 	// draw wireframe outline
-	GL_State( GLS_POLYMODE_LINE | GLS_DEPTHMASK_TRUE | GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE );
+	GL_State( /* GLS_POLYMODE_LINE | */ GLS_DEPTHMASK_TRUE | GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE ); // Cowcat
 	qglDepthRange( 0, 0 );
 	qglColor3f( 1, 1, 1 );
-	qglBegin( GL_POLYGON );
+	//qglBegin( GL_POLYGON ); // Cowcat
+
+	glDisable(GL_TEXTURE_2D); // Cowcat
+	qglBegin( GL_LINES );
 
 	for ( i = 0 ; i < numPoints ; i++ )
 	{
 		qglVertex3fv( points + i * 3 );
 	}
 
+	//qglVertex3fv( points + 0 * 3 );
+	//qglVertex3fv( points + i * 3 );
+	
 	qglEnd();
+
+	glEnable(GL_TEXTURE_2D); // Cowcat
 	qglDepthRange( 0, 1 );
 }
 
@@ -1522,13 +1618,13 @@ Visualization aid for movement clipping debugging
 */
 void R_DebugGraphics( void )
 {
-	if ( !r_debugSurface->integer )
-	{
+	if( tr.refdef.rdflags & RDF_NOWORLDMODEL)
 		return;
-	}
 
-	// the render thread can't make callbacks to the main thread
-	R_SyncRenderThread();
+	if ( !r_debugSurface->integer )
+		return;
+
+	R_IssuePendingRenderCommands();
 
 	GL_Bind( tr.whiteImage);
 	GL_Cull( CT_FRONT_SIDED );
@@ -1547,6 +1643,7 @@ or a mirror / remote location
 void R_RenderView (viewParms_t *parms)
 {
 	int	firstDrawSurf;
+	int	numDrawSurfs;
 
 	if ( parms->viewportWidth <= 0 || parms->viewportHeight <= 0 )
 	{
@@ -1561,7 +1658,7 @@ void R_RenderView (viewParms_t *parms)
 
 	firstDrawSurf = tr.refdef.numDrawSurfs;
 
-	tr.viewCount++;
+	//tr.viewCount++; // oops ! - Cowcat
 
 	// set viewParms.world
 	R_RotateForViewer ();
@@ -1570,7 +1667,17 @@ void R_RenderView (viewParms_t *parms)
 
 	R_GenerateDrawSurfs();
 
-	R_SortDrawSurfs( tr.refdef.drawSurfs + firstDrawSurf, tr.refdef.numDrawSurfs - firstDrawSurf );
+	// if we overflowed MAX_DRAWSURFS, the drawsurfs
+	// wrapped around in the buffer and we will be missing
+	// the first surfaces, not the last ones
+	numDrawSurfs = tr.refdef.numDrawSurfs;
+	
+	if ( numDrawSurfs > MAX_DRAWSURFS )
+	{
+		numDrawSurfs = MAX_DRAWSURFS;
+	}
+
+	R_SortDrawSurfs( tr.refdef.drawSurfs + firstDrawSurf, numDrawSurfs - firstDrawSurf );
 
 	// draw main system development information (surface outlines, etc)
 	R_DebugGraphics();

@@ -24,20 +24,33 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "client.h"
 #include "snd_codec.h"
 
-#if defined(AMIGA) && defined(__VBCC__) && defined (__PPC__)
+#if defined(AMIGA) && defined(__VBCC__)
 
 #undef LittleShort
 #undef LittleLong
 
+#if defined (__PPC__)
+
 short __LittleShort(__reg("r4") short ) =
-	"\trlwinm\t0,4,8,16,24\n"
-	"\trlwimi\t0,4,24,24,31\n"
-	"\textsh\t3,0";
+	"\trlwinm\t3,4,24,24,31\n"
+	"\trlwimi\t3,4,8,16,23";
 
 int __LittleLong(__reg("r4") int) =
 	"\trlwinm\t3,4,24,0,31\n"
 	"\trlwimi\t3,4,8,8,15\n"
 	"\trlwimi\t3,4,8,24,31";
+
+#else // 68k
+
+short __LittleShort(__reg("d0") short ) =
+	"\trol.w\t#8,d0";
+
+int __LittleLong(__reg("d0") int) =
+	"\trol.w\t#8,d0\n"
+	"\tswap\td0\n"
+	"\trol.w\t#8,d0";
+
+#endif
 
 #define LittleShort(x) __LittleShort(x)
 #define LittleLong(x) __LittleLong(x)
@@ -164,7 +177,6 @@ S_ReadRIFFHeader
 static qboolean S_ReadRIFFHeader(fileHandle_t file, snd_info_t *info)
 {
 	char	dump[16];
-	int	wav_format;
 	int	bits;
 	int	fmtlen = 0;
 
@@ -179,7 +191,7 @@ static qboolean S_ReadRIFFHeader(fileHandle_t file, snd_info_t *info)
 	}
 
 	// Save the parameters
-	wav_format = FGetLittleShort(file);
+	FGetLittleShort(file); // wav_format
 	info->channels = FGetLittleShort(file);
 	info->rate = FGetLittleLong(file);
 	FGetLittleLong(file);
@@ -240,7 +252,7 @@ void *S_WAV_CodecLoad(const char *filename, snd_info_t *info)
 
 	if(!file)
 	{
-		Com_Printf( S_COLOR_RED "ERROR: Could not open \"%s\"\n", filename);
+		//Com_Printf( S_COLOR_RED "ERROR: Could not open \"%s\"\n", filename);
 		return NULL;
 	}
 
@@ -254,7 +266,7 @@ void *S_WAV_CodecLoad(const char *filename, snd_info_t *info)
 	}
 
 	// Allocate some memory
-	buffer = Z_Malloc(info->size);
+	buffer = Hunk_AllocateTempMemory(info->size);
 
 	if(!buffer)
 	{

@@ -149,12 +149,12 @@ static unsigned char scantokey[128] =
 	'a','s','d','f','g','h','j','k',                                 // 27
 	'l',';','\'',0,0,K_KP_LEFTARROW,K_KP_5,K_KP_RIGHTARROW,          // 2f
 	'<','z','x','c','v','b','n','m',                                 // 37
-	',','.','/',0,K_KP_DEL,K_HOME,K_KP_UPARROW,K_PGUP,        		 // 3f
+	',','.','/',0,K_KP_DEL,K_HOME,K_KP_UPARROW,K_PGUP,        	 // 3f
 	K_SPACE,K_BACKSPACE,K_TAB,K_KP_ENTER,K_ENTER,K_ESCAPE,K_DEL,0,   // 47
 	0,0,K_KP_MINUS,0,K_UPARROW,K_DOWNARROW,K_RIGHTARROW,K_LEFTARROW, // 4f
 	K_F1,K_F2,K_F3,K_F4,K_F5,K_F6,K_F7,K_F8,                         // 57
 	K_F9,K_F10,0,0,0,0,0,K_F11,                                      // 5f
-	K_SHIFT,K_SHIFT,0,K_CTRL,K_ALT,K_ALT,0,0,               		 // 67
+	K_SHIFT,K_SHIFT,0,K_CTRL,K_ALT,K_ALT,0,0,               	 // 67
 	0,0,0,0,0,0,0,0,                                                 // 6f
 	0,0,0,0,0,0,0,0,                                                 // 77
 	0,0,0,0,0,0,0,0                                                  // 7f
@@ -173,6 +173,7 @@ static qboolean keyDown(UWORD /*uint16*/ code)
 	
 	return qtrue;
 }
+
 
 //void Sys_HandleEvents(void)
 void IN_ProcessEvents(void)
@@ -200,6 +201,8 @@ void IN_ProcessEvents(void)
 
 				//if (IKeymap) // Cowcat
 				{
+					//Com_Printf ("key encoded %d %d\n", imsg->Code, imsg->Qualifier);
+
 					ie.ie_Class = IECLASS_RAWKEY;
 					ie.ie_SubClass = 0;
 					ie.ie_Code = imsg->Code;
@@ -220,12 +223,12 @@ void IN_ProcessEvents(void)
 				{
 					Com_QueueEvent(msgTime, SE_CHAR, buf[0], 0, 0, NULL);
 				}
-				
 			}
-
+				
 			break;
 			
 			case IDCMP_MOUSEMOVE:
+
 				if (mouse_active)
 				{
 					mx = imsg->MouseX;
@@ -257,6 +260,7 @@ void IN_ProcessEvents(void)
 			*/
 
 			case IDCMP_MOUSEBUTTONS:
+
 				switch (imsg->Code & ~IECODE_UP_PREFIX)
 				{
 					case IECODE_LBUTTON:
@@ -275,6 +279,7 @@ void IN_ProcessEvents(void)
 		
 		if (Sys_EventPort)
 			ReplyMsg((struct Message *)imsg);
+
 		else	
 			return;
 		

@@ -32,7 +32,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #endif
 
 /*
-
   THIS ENTIRE FILE IS BACK END
 
   This file deals with applying shaders to surface data in the tess struct.
@@ -45,10 +44,19 @@ R_ArrayElementDiscrete
 This is just for OpenGL conformance testing, it should never be the fastest
 ================
 */
+
+static void APIENTRY R_ArrayElement( GLint index ) // Cowcat
+{
+	qglArrayElement(index);
+}
+
+
+#if 0
 static void APIENTRY R_ArrayElementDiscrete( GLint index )
 {
 	qglColor4ubv( tess.svars.colors[ index ] );
 
+	#if 0 // Cowcat
 	if ( glState.currenttmu )
 	{
 		qglMultiTexCoord2fARB( 0, tess.svars.texcoords[ 0 ][ index ][0], tess.svars.texcoords[ 0 ][ index ][1] );
@@ -56,12 +64,14 @@ static void APIENTRY R_ArrayElementDiscrete( GLint index )
 	}
 
 	else
+	#endif
 	{
 		qglTexCoord2fv( tess.svars.texcoords[ 0 ][ index ] );
 	}
 
 	qglVertex3fv( tess.xyz[ index ] );
 }
+#endif
 
 /*
 ===================
@@ -73,10 +83,14 @@ R_DrawStripElements
 static int	c_vertexes;	// for seeing how long our average strips are
 static int	c_begins;
 
+#define MAX_UINT ((unsigned)(~0))
+
 static void R_DrawStripElements( int numIndexes, const glIndex_t *indexes, void ( APIENTRY *element )(GLint) )
 {
 	int		i;
-	int		last[3] = { -1, -1, -1 };
+	//int		last[3] = { -1, -1, -1 };
+	glIndex_t	last[3] = { (glIndex_t)-1, (glIndex_t)-1, (glIndex_t)-1 }; // test - if glIndex_t is ushort Cowcat
+	//glIndex_t	last[3] = { MAX_UINT, MAX_UINT, MAX_UINT };
 	qboolean	even;
 
 	c_begins++;
@@ -92,6 +106,7 @@ static void R_DrawStripElements( int numIndexes, const glIndex_t *indexes, void 
 	element( indexes[0] );
 	element( indexes[1] );
 	element( indexes[2] );
+
 	c_vertexes += 3;
 
 	last[0] = indexes[0];
@@ -109,8 +124,11 @@ static void R_DrawStripElements( int numIndexes, const glIndex_t *indexes, void 
 			if ( ( indexes[i+0] == last[2] ) && ( indexes[i+1] == last[1] ) )
 			{
 				element( indexes[i+2] );
+				//qglArrayElement( indexes[i+2] );
 				c_vertexes++;
-				assert( indexes[i+2] < tess.numVertexes );
+
+				//assert( indexes[i+2] < tess.numVertexes ); // Cowcat
+
 				even = qtrue;
 			}
 
@@ -121,6 +139,7 @@ static void R_DrawStripElements( int numIndexes, const glIndex_t *indexes, void 
 				qglEnd();
 
 				qglBegin( GL_TRIANGLE_STRIP );
+
 				c_begins++;
 
 				element( indexes[i+0] );
@@ -139,6 +158,8 @@ static void R_DrawStripElements( int numIndexes, const glIndex_t *indexes, void 
 			if ( ( last[2] == indexes[i+1] ) && ( last[0] == indexes[i+0] ) )
 			{
 				element( indexes[i+2] );
+				//qglArrayElement( indexes[i+2] );
+				
 				c_vertexes++;
 
 				even = qfalse;
@@ -151,11 +172,13 @@ static void R_DrawStripElements( int numIndexes, const glIndex_t *indexes, void 
 				qglEnd();
 
 				qglBegin( GL_TRIANGLE_STRIP );
+
 				c_begins++;
 
 				element( indexes[i+0] );
 				element( indexes[i+1] );
 				element( indexes[i+2] );
+
 				c_vertexes += 3;
 
 				even = qfalse;
@@ -191,8 +214,6 @@ static void R_DrawElements( int numIndexes, const glIndex_t *indexes )
 	// default is to use triangles if compiled vertex arrays are present
 	if ( primitives == 0 )
 	{
-		//Com_Printf("DE 1\n");
-
 		if ( qglLockArraysEXT )
 		{
 			primitives = 2;
@@ -204,28 +225,21 @@ static void R_DrawElements( int numIndexes, const glIndex_t *indexes )
 		}
 	}
 
-
 	if ( primitives == 2 )
 	{
-		//Com_Printf("DE 2\n");
-
 		qglDrawElements( GL_TRIANGLES, numIndexes, GL_INDEX_TYPE, indexes );
 		return;
 	}
 
 	if ( primitives == 1 )
 	{
-		//Com_Printf("DE 3\n");
-		
-		R_DrawStripElements( numIndexes,  indexes, qglArrayElement );
+		R_DrawStripElements( numIndexes, indexes, R_ArrayElement );
 		return;
 	}
 	
 	if ( primitives == 3 )
 	{
-		//Com_Printf("DE 4\n");
-		
-		R_DrawStripElements( numIndexes,  indexes, R_ArrayElementDiscrete );
+		R_DrawStripElements( numIndexes, indexes, R_ArrayElementDiscrete );
 		return;
 	}
 
@@ -233,8 +247,8 @@ static void R_DrawElements( int numIndexes, const glIndex_t *indexes )
 
 	#else
 	
-	R_DrawStripElements( numIndexes,  indexes, R_ArrayElementDiscrete );
-	return;
+	//R_DrawStripElements( numIndexes, indexes, R_ArrayElementDiscrete );
+	R_DrawStripElements( numIndexes, indexes, R_ArrayElement );
 
 	#endif
 }
@@ -285,6 +299,8 @@ static void R_BindAnimatedImage( textureBundle_t *bundle )
 	}
 
 	index %= bundle->numImageAnimations;
+	//while ( index >= bundle->numImageAnimations ) // test Cowcat
+		//index -= bundle->numImageAnimations;
 
 	GL_Bind( bundle->image[ index ] );
 }
@@ -298,7 +314,10 @@ Draws triangle outlines for debugging
 */
 static void DrawTris (shaderCommands_t *input)
 {
-	GL_Bind( tr.whiteImage );
+	int 	i;
+	//vec3_t 	verts[SHADER_MAX_VERTEXES];
+
+	//GL_Bind( tr.whiteImage ); // Cowcat
 	qglColor3f (1,1,1);
 
 	GL_State( /* GLS_POLYMODE_LINE |  */ GLS_DEPTHMASK_TRUE ); // Cowcat
@@ -313,17 +332,36 @@ static void DrawTris (shaderCommands_t *input)
 	if (qglLockArraysEXT)
 	{
 		qglLockArraysEXT(0, input->numVertexes);
-		GLimp_LogComment( "glLockArraysEXT\n" );
+		//GLimp_LogComment( "glLockArraysEXT\n" );
 	}
 	#endif
 
-	R_DrawElements( input->numIndexes, input->indexes );
+	//R_DrawElements( input->numIndexes, input->indexes );
+
+	glDisable(GL_TEXTURE_2D); // Cowcat
+	qglBegin( GL_LINES );
+
+	for ( i = 0 ; i < input->numVertexes ; i++)
+	{
+		qglVertex3fv( input->xyz[i] );
+		//qglVertex3fv( input->xyz[i+SHADER_MAX_VERTEXES]);
+		//qglVertex3f( input->xyz[i], input->xyz[i], input->xyz[i] );
+		//qglVertex3fv( input->xyz[i+1] );
+		//VectorCopy( input->xyz[i], verts[i*2] );
+		//qglVertex3fv(verts);
+	}
+
+	//qglVertex3fv( input->xyz[i] );
+	//qglVertex3fv( input->xyz[0] );
+
+	qglEnd();
+	glEnable(GL_TEXTURE_2D); // Cowcat
 
 	#if 0 // Cowcat
 	if (qglUnlockArraysEXT)
 	{
 		qglUnlockArraysEXT();
-		GLimp_LogComment( "glUnlockArraysEXT\n" );
+		//GLimp_LogComment( "glUnlockArraysEXT\n" );
 	}
 	#endif
 
@@ -343,22 +381,25 @@ static void DrawNormals (shaderCommands_t *input)
 	int	i;
 	vec3_t	temp;
 
-	GL_Bind( tr.whiteImage );
+	//GL_Bind( tr.whiteImage ); // Cowcat
 	qglColor3f (1,1,1);
 	qglDepthRange( 0, 0 );	// never occluded
 
-	GL_State( /*GLS_POLYMODE_LINE | */ GLS_DEPTHMASK_TRUE ); // Cowcat
+	GL_State( /* GLS_POLYMODE_LINE | */ GLS_DEPTHMASK_TRUE ); // Cowcat
 
+	glDisable(GL_TEXTURE_2D); // Cowcat
 	qglBegin (GL_LINES);
 
-	for (i = 0 ; i < input->numVertexes ; i++)
+	for (i = 0 ; i < input->numVertexes-1 ; i++)
 	{
 		qglVertex3fv (input->xyz[i]);
 		VectorMA (input->xyz[i], 2, input->normal[i], temp);
 		qglVertex3fv (temp);
 	}
 
+
 	qglEnd ();
+	glEnable(GL_TEXTURE_2D); // Cowcat
 
 	qglDepthRange( 0, 1 );
 }
@@ -391,8 +432,6 @@ void RB_BeginSurface( shader_t *shader, int fogNum )
 	{
 		tess.shaderTime = tess.shader->clampTime;
 	}
-
-
 }
 
 /*
@@ -413,7 +452,7 @@ static void DrawMultitextured( shaderCommands_t *input, int stage )
 
 	GL_State( pStage->stateBits );
 
-	#if 0 // Cowcat
+	#if 0 //  Cowcat
 	// this is an ugly hack to work around a GeForce driver
 	// bug with multitexture and clip planes
 	if ( backEnd.viewParms.isPortal )
@@ -426,7 +465,9 @@ static void DrawMultitextured( shaderCommands_t *input, int stage )
 	// base
 	//
 	GL_SelectTexture( 0 );
+
 	//qglTexCoordPointer( 2, GL_FLOAT, 0, input->svars.texcoords[0] ); // Cowcat
+
 	R_BindAnimatedImage( &pStage->bundle[0] );
 
 	//
@@ -434,6 +475,7 @@ static void DrawMultitextured( shaderCommands_t *input, int stage )
 	//
 	GL_SelectTexture( 1 );
 	qglEnable( GL_TEXTURE_2D );
+
 	//qglEnableClientState( GL_TEXTURE_COORD_ARRAY ); // Cowcat
 
 	if ( r_lightmap->integer )
@@ -473,27 +515,27 @@ Perform dynamic lighting with another rendering pass
 #if idppc_altivec
 static void ProjectDlightTexture_altivec( void )
 {
-	int	i, l;
-	vec_t	origin0, origin1, origin2;
-	float	texCoords0, texCoords1;
-	vector float floatColorVec0, floatColorVec1;
-	vector float modulateVec, colorVec, zero;
-	vector short colorShort;
+	int		i, l;
+	vec_t		origin0, origin1, origin2;
+	float		texCoords0, texCoords1;
+	vector float 	floatColorVec0, floatColorVec1;
+	vector float 	modulateVec, colorVec, zero;
+	vector short 	colorShort;
 	vector signed int colorInt;
 	vector unsigned char floatColorVecPerm, modulatePerm, colorChar;
 	vector unsigned char vSel = VECCONST_UINT8(0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff,
 		0x00, 0x00, 0x00, 0xff,0x00, 0x00, 0x00, 0xff);
-	float	*texCoords;
-	byte	*colors;
-	byte	clipBits[SHADER_MAX_VERTEXES];
-	float	texCoordsArray[SHADER_MAX_VERTEXES][2];
-	byte	colorArray[SHADER_MAX_VERTEXES][4];
+	float		*texCoords;
+	byte		*colors;
+	byte		clipBits[SHADER_MAX_VERTEXES];
+	float		texCoordsArray[SHADER_MAX_VERTEXES][2];
+	byte		colorArray[SHADER_MAX_VERTEXES][4];
 	unsigned	hitIndexes[SHADER_MAX_INDEXES];
 	int		numIndexes;
-	float	scale;
-	float	radius;
-	vec3_t	floatColor;
-	float	modulate = 0.0f;
+	float		scale;
+	float		radius;
+	vec3_t		floatColor;
+	float		modulate = 0.0f;
 
 	if ( !backEnd.refdef.num_dlights ) {
 		return;
@@ -506,12 +548,15 @@ static void ProjectDlightTexture_altivec( void )
 	modulatePerm = (vector unsigned char)vec_splat((vector unsigned int)modulatePerm,0);
 	zero = (vector float)vec_splat_s8(0);
 
-	for ( l = 0 ; l < backEnd.refdef.num_dlights ; l++ ) {
+	for ( l = 0 ; l < backEnd.refdef.num_dlights ; l++ )
+	{
 		dlight_t	*dl;
 
-		if ( !( tess.dlightBits & ( 1 << l ) ) ) {
+		if ( !( tess.dlightBits & ( 1 << l ) ) )
+		{
 			continue;	// this surface definately doesn't have any of this light
 		}
+
 		texCoords = texCoordsArray[0];
 		colors = colorArray[0];
 
@@ -529,18 +574,22 @@ static void ProjectDlightTexture_altivec( void )
 			luminance = (dl->color[0] * 255.0f + dl->color[1] * 255.0f + dl->color[2] * 255.0f) / 3;
 			floatColor[0] = floatColor[1] = floatColor[2] = luminance;
 		}
+
 		else
 		{
 			floatColor[0] = dl->color[0] * 255.0f;
 			floatColor[1] = dl->color[1] * 255.0f;
 			floatColor[2] = dl->color[2] * 255.0f;
 		}
+
 		floatColorVec0 = vec_ld(0, floatColor);
 		floatColorVec1 = vec_ld(11, floatColor);
 		floatColorVec0 = vec_perm(floatColorVec0,floatColorVec0,floatColorVecPerm);
-		for ( i = 0 ; i < tess.numVertexes ; i++, texCoords += 2, colors += 4 ) {
-			int		clip = 0;
-			vec_t dist0, dist1, dist2;
+
+		for ( i = 0 ; i < tess.numVertexes ; i++, texCoords += 2, colors += 4 )
+		{
+			int	clip = 0;
+			vec_t	dist0, dist1, dist2;
 			
 			dist0 = origin0 - tess.xyz[i][0];
 			dist1 = origin1 - tess.xyz[i][1];
@@ -555,9 +604,13 @@ static void ProjectDlightTexture_altivec( void )
 					// dist . tess.normal[i]
 					( dist0 * tess.normal[i][0] +
 					dist1 * tess.normal[i][1] +
-					dist2 * tess.normal[i][2] ) < 0.0f ) {
+					dist2 * tess.normal[i][2] ) < 0.0f )
+			{
 				clip = 63;
-			} else {
+			}
+
+			else
+			{
 				if ( texCoords0 < 0.0f ) {
 					clip |= 1;
 				} else if ( texCoords0 > 1.0f ) {
@@ -568,65 +621,88 @@ static void ProjectDlightTexture_altivec( void )
 				} else if ( texCoords1 > 1.0f ) {
 					clip |= 8;
 				}
+
 				texCoords[0] = texCoords0;
 				texCoords[1] = texCoords1;
 
 				// modulate the strength based on the height and color
-				if ( dist2 > radius ) {
+				if ( dist2 > radius )
+				{
 					clip |= 16;
 					modulate = 0.0f;
-				} else if ( dist2 < -radius ) {
+				}
+
+				else if ( dist2 < -radius )
+				{
 					clip |= 32;
 					modulate = 0.0f;
-				} else {
+				}
+
+				else
+				{
 					dist2 = Q_fabs(dist2);
-					if ( dist2 < radius * 0.5f ) {
+
+					if ( dist2 < radius * 0.5f )
+					{
 						modulate = 1.0f;
-					} else {
+					}
+
+					else
+					{
 						modulate = 2.0f * (radius - dist2) * scale;
 					}
 				}
 			}
+
 			clipBits[i] = clip;
 
 			modulateVec = vec_ld(0,(float *)&modulate);
 			modulateVec = vec_perm(modulateVec,modulateVec,modulatePerm);
 			colorVec = vec_madd(floatColorVec0,modulateVec,zero);
-			colorInt = vec_cts(colorVec,0); // RGBx
-			colorShort = vec_pack(colorInt,colorInt);		// RGBxRGBx
+			colorInt = vec_cts(colorVec,0); 		// RGBx
+			colorShort = vec_pack(colorInt,colorInt);	// RGBxRGBx
 			colorChar = vec_packsu(colorShort,colorShort);	// RGBxRGBxRGBxRGBx
-			colorChar = vec_sel(colorChar,vSel,vSel);		// RGBARGBARGBARGBA replace alpha with 255
+			colorChar = vec_sel(colorChar,vSel,vSel);	// RGBARGBARGBARGBA replace alpha with 255
 			vec_ste((vector unsigned int)colorChar,0,(unsigned int *)colors);	// store color
 		}
 
 		// build a list of triangles that need light
 		numIndexes = 0;
-		for ( i = 0 ; i < tess.numIndexes ; i += 3 ) {
-			int		a, b, c;
+
+		for ( i = 0 ; i < tess.numIndexes ; i += 3 )
+		{
+			int	a, b, c;
 
 			a = tess.indexes[i];
 			b = tess.indexes[i+1];
 			c = tess.indexes[i+2];
-			if ( clipBits[a] & clipBits[b] & clipBits[c] ) {
+
+			if ( clipBits[a] & clipBits[b] & clipBits[c] )
+			{
 				continue;	// not lighted
 			}
+
 			hitIndexes[numIndexes] = a;
 			hitIndexes[numIndexes+1] = b;
 			hitIndexes[numIndexes+2] = c;
 			numIndexes += 3;
 		}
 
-		if ( !numIndexes ) {
+		if ( !numIndexes )
+		{
 			continue;
 		}
 
-		qglEnableClientState( GL_TEXTURE_COORD_ARRAY );
-		qglTexCoordPointer( 2, GL_FLOAT, 0, texCoordsArray[0] );
+		{
+			qglEnableClientState( GL_TEXTURE_COORD_ARRAY );
+			qglTexCoordPointer( 2, GL_FLOAT, 0, texCoordsArray[0] );
 
-		qglEnableClientState( GL_COLOR_ARRAY );
-		qglColorPointer( 4, GL_UNSIGNED_BYTE, 0, colorArray );
+			qglEnableClientState( GL_COLOR_ARRAY );
+			qglColorPointer( 4, GL_UNSIGNED_BYTE, 0, colorArray );
+		}
 
 		GL_Bind( tr.dlightImage );
+
 		// include GLS_DEPTHFUNC_EQUAL so alpha tested surfaces don't add light
 		// where they aren't rendered
 		if ( dl->additive ) {
@@ -635,6 +711,7 @@ static void ProjectDlightTexture_altivec( void )
 		else {
 			GL_State( GLS_SRCBLEND_DST_COLOR | GLS_DSTBLEND_ONE | GLS_DEPTHFUNC_EQUAL );
 		}
+
 		R_DrawElements( numIndexes, hitIndexes );
 		backEnd.pc.c_totalIndexes += numIndexes;
 		backEnd.pc.c_dlightIndexes += numIndexes;
@@ -652,7 +729,7 @@ static void ProjectDlightTexture_scalar( void )
 	byte		clipBits[SHADER_MAX_VERTEXES];
 	float		texCoordsArray[SHADER_MAX_VERTEXES][2];
 	byte		colorArray[SHADER_MAX_VERTEXES][4];
-	unsigned	hitIndexes[SHADER_MAX_INDEXES];
+	glIndex_t	hitIndexes[SHADER_MAX_INDEXES];
 	int		numIndexes;
 	float		scale;
 	float		radius;
@@ -672,6 +749,9 @@ static void ProjectDlightTexture_scalar( void )
 		{
 			continue;	// this surface definately doesn't have any of this light
 		}
+
+		// clear colors
+		//Com_Memset ( colorArray, 0, sizeof( colorArray ) ); // spearmint test - Cowcat
 
 		texCoords = texCoordsArray[0];
 		colors = colorArray[0];
@@ -712,7 +792,8 @@ static void ProjectDlightTexture_scalar( void )
 					// dist . tess.normal[i]
 					( dist[0] * tess.normal[i][0] +
 					dist[1] * tess.normal[i][1] +
-					dist[2] * tess.normal[i][2] ) < 0.0f ) {
+					dist[2] * tess.normal[i][2] ) < 0.0f )
+			{
 				clip = 63;
 			}
 
@@ -757,6 +838,7 @@ static void ProjectDlightTexture_scalar( void )
 				else
 				{
 					dist[2] = Q_fabs(dist[2]);
+					//*((int*)&dist[2]) &= 0x7FFFFFFF; // test - Cowcat
 
 					if ( dist[2] < radius * 0.5f )
 					{
@@ -782,7 +864,8 @@ static void ProjectDlightTexture_scalar( void )
 
 		for ( i = 0 ; i < tess.numIndexes ; i += 3 )
 		{
-			int	a, b, c;
+			int		a, b, c; 
+			//glIndex_t	a, b, c; // test - if glIndex_t is ushort Cowcat
 
 			a = tess.indexes[i];
 			b = tess.indexes[i+1];
@@ -804,13 +887,11 @@ static void ProjectDlightTexture_scalar( void )
 			continue;
 		}
 
-		#if 0 // Cowcat
 		qglEnableClientState( GL_TEXTURE_COORD_ARRAY );
 		qglTexCoordPointer( 2, GL_FLOAT, 0, texCoordsArray[0] );
 
 		qglEnableClientState( GL_COLOR_ARRAY );
 		qglColorPointer( 4, GL_UNSIGNED_BYTE, 0, colorArray );
-		#endif
 
 		GL_Bind( tr.dlightImage );
 
@@ -827,10 +908,12 @@ static void ProjectDlightTexture_scalar( void )
 		}
 
 		R_DrawElements( numIndexes, hitIndexes );
+
 		backEnd.pc.c_totalIndexes += numIndexes;
 		backEnd.pc.c_dlightIndexes += numIndexes;
 	}
-}
+	
+}	
 
 static void ProjectDlightTexture( void )
 {
@@ -859,13 +942,11 @@ static void RB_FogPass( void )
 	fog_t	*fog;
 	int	i;
 
-	#if 0 // Cowcat
 	qglEnableClientState( GL_COLOR_ARRAY );
 	qglColorPointer( 4, GL_UNSIGNED_BYTE, 0, tess.svars.colors );
 
 	qglEnableClientState( GL_TEXTURE_COORD_ARRAY);
 	qglTexCoordPointer( 2, GL_FLOAT, 0, tess.svars.texcoords[0] );
-	#endif
 
 	fog = tr.world->fogs + tess.fogNum;
 
@@ -1006,7 +1087,6 @@ static void ComputeColors( shaderStage_t *pStage )
 	//
 	// alphaGen
 	//
-
 	switch ( pStage->alphaGen )
 	{
 		case AGEN_SKIP:
@@ -1115,7 +1195,6 @@ static void ComputeColors( shaderStage_t *pStage )
 	//
 	// fog adjustment for colors to fade out as fog increases
 	//
-
 	if ( tess.fogNum )
 	{
 		switch ( pStage->adjustColorsForFog )
@@ -1275,6 +1354,8 @@ static void ComputeTexCoords( shaderStage_t *pStage )
 static void RB_IterateStagesGeneric( shaderCommands_t *input )
 {
 	int stage;
+	
+	glLockArrays(0, input->numVertexes); // Cowcat
 
 	for ( stage = 0; stage < MAX_SHADER_STAGES; stage++ )
 	{
@@ -1284,16 +1365,14 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input )
 		{
 			break;
 		}
-
+		
 		ComputeColors( pStage );
 		ComputeTexCoords( pStage );
 
 		if ( !setArraysOnce )
 		{
-			#if 0 // Cowcat
 			qglEnableClientState( GL_COLOR_ARRAY );
 			qglColorPointer( 4, GL_UNSIGNED_BYTE, 0, input->svars.colors );
-			#endif
 		}
 
 		//
@@ -1308,47 +1387,31 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input )
 		{
 			if ( !setArraysOnce )
 			{
-				//qglTexCoordPointer( 2, GL_FLOAT, 0, input->svars.texcoords[0] ); // Cowcat
+				qglTexCoordPointer( 2, GL_FLOAT, 0, input->svars.texcoords[0] ); 
 			}
 
 			//
 			// set state
 			//
-
-			#if 0 // never qtrue - Cowcat
-
-			if ( pStage->bundle[0].vertexLightmap && ( (r_vertexLight->integer && !r_uiFullScreen->integer) || 
-				glConfig.hardwareType == GLHW_PERMEDIA2 ) && r_lightmap->integer )
-			{
-				GL_Bind( tr.whiteImage );
-			}
-
-			else 
-				R_BindAnimatedImage( &pStage->bundle[0] );
-
-			#else
-
 			R_BindAnimatedImage( &pStage->bundle[0] );
-
-			#endif
 
 			GL_State( pStage->stateBits );
 
 			//
 			// draw
 			//
-
 			R_DrawElements( input->numIndexes, input->indexes );
-
 		}
 
 		// allow skipping out to show just lightmaps during development
-		//if ( r_lightmap->integer && ( pStage->bundle[0].isLightmap || pStage->bundle[1].isLightmap || pStage->bundle[0].vertexLightmap ) )
-		if ( r_lightmap->integer && ( pStage->bundle[0].isLightmap || pStage->bundle[1].isLightmap ) ) // fix - Cowcat
+		if ( r_lightmap->integer && ( pStage->bundle[0].isLightmap || pStage->bundle[1].isLightmap ) )
 		{
 			break;
 		}
 	}
+
+	glUnlockArrays(); // Cowcat
+
 }
 
 
@@ -1358,30 +1421,32 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input )
 void RB_StageIteratorGeneric( void )
 {
 	shaderCommands_t 	*input;
-	shader_t		*shader; // Cowcat
+	shader_t		*shader;
 
 	input = &tess;
-	shader = input->shader; // Cowcat
+	shader = input->shader;
 
 	RB_DeformTessGeometry();
 
 	//
 	// log this call
 	//
+	#if 0 // Cowcat
 	if ( r_logFile->integer ) 
 	{
 		// don't just call LogComment, or we will get
 		// a call to va() every frame!
-		//GLimp_LogComment( va("--- RB_StageIteratorGeneric( %s ) ---\n", tess.shader->name) ); // Cowcat
+		GLimp_LogComment( va("--- RB_StageIteratorGeneric( %s ) ---\n", tess.shader->name) );
 	}
+	#endif
 
 	//
 	// set face culling appropriately
 	//
-	GL_Cull( shader->cullType ); // was input->shader->cullType - Cowcat
+	GL_Cull( shader->cullType );
 
 	// set polygon offset if necessary
-	if ( input->shader->polygonOffset )
+	if ( shader->polygonOffset )
 	{
 		qglEnable( GL_POLYGON_OFFSET_FILL );
 		//qglPolygonOffset( r_offsetFactor->value, r_offsetUnits->value ); // Cowcat
@@ -1393,52 +1458,49 @@ void RB_StageIteratorGeneric( void )
 	// to avoid compiling those arrays since they will change
 	// during multipass rendering
 	//
+
 	if ( tess.numPasses > 1 || input->shader->multitextureEnv )
 	{
 		setArraysOnce = qfalse;
 
-		#if 0 // Cowcat
 		qglDisableClientState (GL_COLOR_ARRAY);
 		qglDisableClientState (GL_TEXTURE_COORD_ARRAY);
-		#endif
 	}
 
 	else
 	{
 		setArraysOnce = qtrue;
 
-		#if 0 // Cowcat
 		qglEnableClientState( GL_COLOR_ARRAY);
 		qglColorPointer( 4, GL_UNSIGNED_BYTE, 0, tess.svars.colors );
 
 		qglEnableClientState( GL_TEXTURE_COORD_ARRAY);
 		qglTexCoordPointer( 2, GL_FLOAT, 0, tess.svars.texcoords[0] );
-		#endif
 	}
 
 	//
 	// lock XYZ
 	//
+	qglVertexPointer (3, GL_FLOAT, 16, input->xyz); // padded for SIMD 
 
 	#if 0 // Cowcat
-	qglVertexPointer (3, GL_FLOAT, 16, input->xyz); // padded for SIMD
-
 	if (qglLockArraysEXT)
 	{
-		qglLockArraysEXT(0, input->numVertexes);
-		GLimp_LogComment( "glLockArraysEXT\n" );
+		//qglLockArraysEXT(0, input->numVertexes);
+		glLockArrays(0, input->numVertexes);
+		//GLimp_LogComment( "glLockArraysEXT\n" );
 	}
 	#endif
+
+	qglEnableClientState (GL_VERTEX_ARRAY); // Cowcat
 
 	//
 	// enable color and texcoord arrays after the lock if necessary
 	//
 	if ( !setArraysOnce )
 	{
-		#if 0 // Cowcat
 		qglEnableClientState( GL_TEXTURE_COORD_ARRAY );
 		qglEnableClientState( GL_COLOR_ARRAY );
-		#endif
 	}
 
 	//
@@ -1454,13 +1516,13 @@ void RB_StageIteratorGeneric( void )
 		ProjectDlightTexture();
 	}
 
-	//
 	// now do fog
 	//
 	if ( tess.fogNum && tess.shader->fogPass )
 	{
 		RB_FogPass();
 	}
+
 
 	// 
 	// unlock arrays
@@ -1469,15 +1531,18 @@ void RB_StageIteratorGeneric( void )
 	#if 0 // Cowcat
 	if (qglUnlockArraysEXT) 
 	{
-		qglUnlockArraysEXT();
-		GLimp_LogComment( "glUnlockArraysEXT\n" );
+		//qglUnlockArraysEXT();
+		glUnlockArrays();
+		//GLimp_LogComment( "glUnlockArraysEXT\n" );
 	}
 	#endif
+
+	qglDisableClientState (GL_VERTEX_ARRAY); // Cowcat
 
 	//
 	// reset polygon offset
 	//
-	if ( input->shader->polygonOffset )
+	if ( shader->polygonOffset )
 	{
 		qglDisable( GL_POLYGON_OFFSET_FILL );
 	}
@@ -1504,36 +1569,38 @@ void RB_StageIteratorVertexLitTexture( void )
 	//
 	// log this call
 	//
+	#if 0 // Cowcat
 	if ( r_logFile->integer ) 
 	{
 		// don't just call LogComment, or we will get
 		// a call to va() every frame!
-		//GLimp_LogComment( va("--- RB_StageIteratorVertexLitTexturedUnfogged( %s ) ---\n", tess.shader->name) ); // Cowcat
+		GLimp_LogComment( va("--- RB_StageIteratorVertexLitTexturedUnfogged( %s ) ---\n", tess.shader->name) );
 	}
+	#endif
 
 	//
 	// set face culling appropriately
 	//
-	GL_Cull( shader->cullType ); // was input->shader->cullType - Cowcat
+	GL_Cull( shader->cullType );
 
 	//
 	// set arrays and lock
 	//
-
-	#if 0 // Cowcat
 	qglEnableClientState( GL_COLOR_ARRAY);
 	qglEnableClientState( GL_TEXTURE_COORD_ARRAY);
+	qglEnableClientState (GL_VERTEX_ARRAY); // Cowcat
 
 	qglColorPointer( 4, GL_UNSIGNED_BYTE, 0, tess.svars.colors );
 	qglTexCoordPointer( 2, GL_FLOAT, 16, tess.texCoords[0][0] );
 	qglVertexPointer (3, GL_FLOAT, 16, input->xyz);
 
+	#if 0 // Cowcat
 	if ( qglLockArraysEXT )
 	{
-		qglLockArraysEXT(0, input->numVertexes);
-		GLimp_LogComment( "glLockArraysEXT\n" );
+		glLockArrays(0, input->numVertexes);
+		//GLimp_LogComment( "glLockArraysEXT\n" );
 	}
-	#endif 
+	#endif
 
 	//
 	// call special shade routine
@@ -1541,7 +1608,9 @@ void RB_StageIteratorVertexLitTexture( void )
 	R_BindAnimatedImage( &tess.xstages[0]->bundle[0] );
 	GL_State( tess.xstages[0]->stateBits );
 
+	glLockArrays(0, input->numVertexes); // Cowcat
 	R_DrawElements( input->numIndexes, input->indexes );
+	glUnlockArrays(); // Cowcat
 
 	// 
 	// now do any dynamic lighting needed
@@ -1565,10 +1634,14 @@ void RB_StageIteratorVertexLitTexture( void )
 	#if 0 // Cowcat
 	if (qglUnlockArraysEXT) 
 	{
-		qglUnlockArraysEXT();
-		GLimp_LogComment( "glUnlockArraysEXT\n" );
+		glUnlockArrays();
+		//GLimp_LogComment( "glUnlockArraysEXT\n" );
 	}
 	#endif
+
+	qglDisableClientState (GL_VERTEX_ARRAY);
+	//qglDisableClientState( GL_COLOR_ARRAY);
+	//qglDisableClientState( GL_TEXTURE_COORD_ARRAY);
 }
 
 //define REPLACE_MODE
@@ -1576,25 +1649,27 @@ void RB_StageIteratorVertexLitTexture( void )
 void RB_StageIteratorLightmappedMultitexture( void )
 {
 	shaderCommands_t	*input;
-	shader_t		*shader; // Cowcat
+	shader_t		*shader;
 
 	input = &tess;
-	shader = input->shader; // Cowcat
+	shader = input->shader;
 
 	//
 	// log this call
 	//
+	#if 0 // Cowcat
 	if ( r_logFile->integer )
 	{
 		// don't just call LogComment, or we will get
 		// a call to va() every frame!
-		//GLimp_LogComment( va("--- RB_StageIteratorLightmappedMultitexture( %s ) ---\n", tess.shader->name) ); // Cowcat
+		GLimp_LogComment( va("--- RB_StageIteratorLightmappedMultitexture( %s ) ---\n", tess.shader->name) );
 	}
+	#endif
 
 	//
 	// set face culling appropriately
 	//
-	GL_Cull( shader->cullType ); // was input->shader->cullType  - Cowcat
+	GL_Cull( shader->cullType );
 
 	//
 	// set color, pointers, and lock
@@ -1602,6 +1677,7 @@ void RB_StageIteratorLightmappedMultitexture( void )
 	GL_State( GLS_DEFAULT );
 
 	#if 0 // Cowcat
+
 	qglVertexPointer( 3, GL_FLOAT, 16, input->xyz );
 
 #ifdef REPLACE_MODE
@@ -1614,14 +1690,15 @@ void RB_StageIteratorLightmappedMultitexture( void )
 #endif
 	#endif
 
-
 	//
 	// select base stage
 	//
 	GL_SelectTexture( 0 );
 
 	//qglEnableClientState( GL_TEXTURE_COORD_ARRAY ); // Cowcat
+
 	R_BindAnimatedImage( &tess.xstages[0]->bundle[0] );
+
 	//qglTexCoordPointer( 2, GL_FLOAT, 16, tess.texCoords[0][0] ); // Cowcat
 
 	//
@@ -1643,6 +1720,7 @@ void RB_StageIteratorLightmappedMultitexture( void )
 	R_BindAnimatedImage( &tess.xstages[0]->bundle[1] );
 
 	#if 0 // Cowcat
+
 	qglEnableClientState( GL_TEXTURE_COORD_ARRAY );
 	qglTexCoordPointer( 2, GL_FLOAT, 16, tess.texCoords[0][1] );
 
@@ -1652,8 +1730,9 @@ void RB_StageIteratorLightmappedMultitexture( void )
 	if ( qglLockArraysEXT )
 	{
 		qglLockArraysEXT(0, input->numVertexes);
-		GLimp_LogComment( "glLockArraysEXT\n" );
+		//GLimp_LogComment( "glLockArraysEXT\n" );
 	}
+
 	#endif
 
 	R_DrawElements( input->numIndexes, input->indexes );
@@ -1662,6 +1741,7 @@ void RB_StageIteratorLightmappedMultitexture( void )
 	// disable texturing on TEXTURE1, then select TEXTURE0
 	//
 	qglDisable( GL_TEXTURE_2D );
+
 	//qglDisableClientState( GL_TEXTURE_COORD_ARRAY ); // Cowcat
 
 	GL_SelectTexture( 0 );
@@ -1694,7 +1774,7 @@ void RB_StageIteratorLightmappedMultitexture( void )
 	if ( qglUnlockArraysEXT )
 	{
 		qglUnlockArraysEXT();
-		GLimp_LogComment( "glUnlockArraysEXT\n" );
+		//GLimp_LogComment( "glUnlockArraysEXT\n" );
 	}
 	#endif
 }

@@ -48,7 +48,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 //struct GLContext_t *context = 0;
 GLboolean old_context = GL_FALSE;
-//extern struct MiniGLIFace *IMiniGL;
 
 extern qboolean mouse_active;
 extern int mx, my;
@@ -58,6 +57,8 @@ cvar_t *r_closeworkbench;
 cvar_t *r_guardband; //
 cvar_t *r_vertexbuffersize; //
 cvar_t *r_glbuffers; //
+cvar_t *r_perspective_fast; //
+cvar_t *r_w_one_fast; //
 //cvar_t *r_lockmode; //
 
 extern cvar_t *in_nograb;
@@ -68,11 +69,13 @@ extern struct MsgPort *Sys_EventPort;
 
 struct Window *win = NULL;
 
+//extern GLcontext mini_CurrentContext;
+
 void (APIENTRYP qglActiveTextureARB) (GLenum texture);
 void (APIENTRYP qglClientActiveTextureARB) (GLenum texture);
 void (APIENTRYP qglMultiTexCoord2fARB) (GLenum target, GLfloat s, GLfloat t);
 
-void (APIENTRYP qglLockArraysEXT) (GLint first, GLsizei count);
+void (APIENTRYP qglLockArraysEXT) (GLint first, GLsizei count); //
 void (APIENTRYP qglUnlockArraysEXT) (void);
 
 
@@ -80,36 +83,23 @@ void GLimp_RenderThreadWrapper( void *stub )
 {
 }
 
+/*
 qboolean GLimp_SpawnRenderThread( void (*function)( void ) ) 
 {
 	ri.Printf( PRINT_WARNING, "ERROR: SMP support was disabled at compile time\n");
 	return qfalse;
 }
+*/
 
-void *GLimp_RendererSleep( void ) 
-{
-	return NULL;
-}
+//void *GLimp_RendererSleep( void ) { return NULL; }
+//void GLimp_FrontEndSleep( void ) {}
+//void GLimp_WakeRenderer( void *data ) {}
 
-void GLimp_FrontEndSleep( void ) 
-{
-}
+void GLimp_SetGamma( unsigned char red[256], unsigned char green[256], unsigned char blue[256] ) {}
 
-void GLimp_WakeRenderer( void *data ) 
-{
-}
+void GLW_InitGamma(void) {}
 
-void GLimp_SetGamma( unsigned char red[256], unsigned char green[256], unsigned char blue[256] )
-{
-}
-
-void GLW_InitGamma(void)
-{
-}
-
-void GLW_RestoreGamma(void)
-{
-}
+void GLW_RestoreGamma(void) {}
 
 #if 0
 void GL_SetLockMode(char *mode)
@@ -162,7 +152,6 @@ static qboolean GLW_StartDriverAndSetMode( const char *drivername, int mode, int
 	
 	ri.Printf( PRINT_ALL, " %d %d %s\n", glConfig.vidWidth, glConfig.vidHeight, fullscreen ? "fullscreen" : "windowed" );
 
-
 	/*
 	** surgeon: The highest number of verts is 4096
 	** (max point-particles) and in that case no clipping-space
@@ -185,51 +174,76 @@ static qboolean GLW_StartDriverAndSetMode( const char *drivername, int mode, int
 	** max 4096 verts in total (tightly packed)
 	*/
 
-	#if 0
+	#if 1
 	if(old_context)
 	{
+		ri.Printf(PRINT_ALL, "Deleting old context \n");
+		//
+		qglDisableClientState( GL_COLOR_ARRAY );
+		qglDisableClientState( GL_TEXTURE_COORD_ARRAY );
+		qglDisableClientState(GL_VERTEX_ARRAY);
+		//
+
 		mglDeleteContext();
 		old_context = GL_FALSE;
 	}
 	#endif
 
-	MGLInit();
+	//MGLInit(); // now in amiga_qgl.c/ QGL_init - 
 
 	r_vertexbuffersize  = Cvar_Get("r_vertexbuffersize", "4096", CVAR_ARCHIVE);
 	r_glbuffers  = Cvar_Get("r_glbuffers", "3", CVAR_ARCHIVE);
+	r_perspective_fast = Cvar_Get("r_perpective_fast", "0", CVAR_ARCHIVE);
+	r_w_one_fast = Cvar_Get("r_w_one_fast", "0", CVAR_ARCHIVE);
 	//r_lockmode = Cvar_Get("r_lockmode", "SMART", CVAR_ARCHIVE);
 
-	mglChoosePixelDepth(16); //glConfig.depthBits);
-	//mglChooseNumberOfBuffers(3); 
+	mglChoosePixelDepth(16); //glConfig.depthBits); 
 	mglChooseVertexBufferSize( (int)r_vertexbuffersize->value ); // 4096 - 16384 //
-	//mglChooseMtexBufferSize( 8192 );
 
 	if(!fullscreen)
 	{
 		mglChooseWindowMode(GL_TRUE);
 		mglChooseNumberOfBuffers(2);
+		Cvar_Set("r_glbuffers", "2");
 	}
 
 	else
 	{
-		mglChooseNumberOfBuffers(3);
 		mglChooseWindowMode(GL_FALSE);
+		mglChooseNumberOfBuffers(3);
+		Cvar_Set("r_glbuffers", "3");
+		
 	}
 
+	r_guardband  = Cvar_Get("r_guardband", "0", CVAR_ARCHIVE);
+
+	if(r_guardband->value)
+	{
+		mglChooseGuardBand(GL_TRUE);
+		ri.Printf(PRINT_ALL, "guardband on\n");
+	}
+
+	else
+	{
+		mglChooseGuardBand(GL_FALSE);
+		ri.Printf(PRINT_ALL, "guardband off\n");
+	}
+
+	#if 0 // no multitexture in this version - Cowcat
 	//base the size on #of polygons to store
-	//gl_mtexbuffersize = ri.Cvar_Get("gl_mtexbuffersize", "1024", CVAR_ARCHIVE);
+	gl_mtexbuffersize = ri.Cvar_Get("gl_mtexbuffersize", "1024", CVAR_ARCHIVE);
 
-	//if((int)gl_mtexbuffersize <= 1024)
-		mglChooseMtexBufferSize( 4096 );
-	//else
-		//mglChooseMtexBufferSize( (int)gl_mtexbuffersize->value * 4);
+	if((int)gl_mtexbuffersize <= 1024)
+		mglChooseMtexBufferSize( 4096 ); 
 
-	/////////
+	else
+		mglChooseMtexBufferSize( (int)gl_mtexbuffersize->value * 4);
+	#endif
 	
-	//old_context = (NULL == mglCreateContext(0, 0, glConfig.vidWidth, glConfig.vidHeight) ? GL_FALSE : GL_TRUE);
+	old_context = (NULL == mglCreateContext(0, 0, glConfig.vidWidth, glConfig.vidHeight) ? GL_FALSE : GL_TRUE);
 
-	if(!mglCreateContext(0, 0, glConfig.vidWidth, glConfig.vidHeight))
-	//if(!old_context)
+	//if(!mglCreateContext(0, 0, glConfig.vidWidth, glConfig.vidHeight))
+	if(!old_context)
 	{
 		return qfalse;
 	}
@@ -248,21 +262,8 @@ static qboolean GLW_StartDriverAndSetMode( const char *drivername, int mode, int
 	    	mglEnableSync(GL_TRUE);
 	}
 
-	r_guardband  = Cvar_Get("r_guardband", "0", CVAR_ARCHIVE);
+	mglLockMode(MGL_LOCK_SMART);
 
-	if(r_guardband->value)
-	{
-		mglChooseGuardBand(GL_TRUE);
-		ri.Printf(PRINT_ALL, "guardband on\n");
-	}
-
-	else
-	{
-		mglChooseGuardBand(GL_FALSE);
-		ri.Printf(PRINT_ALL, "guardband off\n");
-	}
-
-	mglLockMode(MGL_LOCK_SMART); // was MGL_LOCK_SMART
 	//GL_SetLockMode(r_lockmode->string);
 
 	/*
@@ -273,13 +274,17 @@ static qboolean GLW_StartDriverAndSetMode( const char *drivername, int mode, int
 		mglEnableSync(GL_TRUE);
 	*/
 
+	#if 1
 	win = mglGetWindowHandle();
 
 	//ModifyIDCMP((struct Window *)mglGetWindowHandle(), IDCMP_RAWKEY|IDCMP_MOUSEMOVE|IDCMP_MOUSEBUTTONS|IDCMP_DELTAMOVE);
 	ModifyIDCMP(win, IDCMP_RAWKEY|IDCMP_MOUSEMOVE|IDCMP_MOUSEBUTTONS|IDCMP_DELTAMOVE);
 	ReportMouse(TRUE, win);
+	#endif
 
-	Sys_EventPort = ((struct Window *)mglGetWindowHandle())->UserPort;
+	//Sys_EventPort = ((struct Window *)mglGetWindowHandle())->UserPort;
+	Sys_EventPort = win->UserPort;
+
 	ri.Printf(PRINT_ALL, "... Sys_EventPort at %p\n", Sys_EventPort);
 	
 	#if 1 // keep this here - Cowcat
@@ -300,45 +305,51 @@ static qboolean GLW_StartDriverAndSetMode( const char *drivername, int mode, int
 	glConfig.isFullscreen = fullscreen;
 	#endif
 	
+	// test - Cowcat
+	if(r_perspective_fast->value)
+	{
+		glHint (GL_PERSPECTIVE_CORRECTION_HINT, GL_FASTEST);
+		ri.Printf(PRINT_ALL, "GL_Perspective_Correction_hint: fast\n");
+	}
+
+	if(r_w_one_fast->value)
+	{
+		glHint (MGL_W_ONE_HINT, GL_FASTEST);
+		ri.Printf(PRINT_ALL, "MGL_w_one_hint: fast\n");
+	}
+
 	r_closeworkbench = Cvar_Get("r_closeworkbench", "0", CVAR_ARCHIVE);
 
 	if (fullscreen && r_closeworkbench->value)
 		mglProposeCloseDesktop(GL_TRUE);
 
 	// That cleans windowmode - Cowcat
+
 	qglClearColor(0,0,0,1);
 	qglClear(GL_COLOR_BUFFER_BIT);
-
-	//
+	//mglSwitchDisplay(); // test - Cowcat
 
 	return qtrue;
 }
 	
+
 static void GLW_Shutdown(void)
 {
-	//if (old_context)
-	{
-		/*
-		context->DeleteContext();
-		context = 0;
-		
-		mglMakeCurrent(0);
-		*/
-
+	if(old_context == GL_TRUE)
 		mglDeleteContext();
-		MGLTerm();
 
-		Sys_EventPort = 0;
-	}
+	old_context = GL_FALSE;
+
+	//MGLTerm(); // now in amigaqgl.c/QGL_Shutdown
+
+	Sys_EventPort = 0;
 }
 
 static qboolean GLW_LoadOpenGL(const char *name)
 {
 	qboolean fullscreen;
-
-	//ri.Printf( PRINT_ALL, "...loading %s\n", name);
 	
-	//if (QGL_Init(name))
+	if (QGL_Init(name))
 	{
 		fullscreen = r_fullscreen->integer;
 		
@@ -368,7 +379,6 @@ void GLW_StartOpenGL(void)
 {
 	GLW_LoadOpenGL("minigl.library");
 }
-
 
 static void GLW_InitExtensions( void )
 {
@@ -470,12 +480,17 @@ static void GLW_InitExtensions( void )
 	}
 
 	// GL_EXT_compiled_vertex_array
-	if ( strstr( glConfig.extensions_string, "GL_EXT_compiled_vertex_array" ) && ( glConfig.hardwareType != GLHW_RIVA128 ) )
+	//if ( strstr( glConfig.extensions_string, "GL_EXT_compiled_vertex_array" ) && ( glConfig.hardwareType != GLHW_RIVA128 ) )
 	{
 		if ( r_ext_compiled_vertex_array->integer )
 		{
-			//qglLockArraysEXT = &glLockArraysEXT;
-			//qglUnlockArraysEXT = glUnlockArraysEXT;
+			//qglLockArraysEXT = &glLockArrays; 
+			//qglUnlockArraysEXT = glUnlockArrays;
+			//qglLockArraysEXT = &GLLockArrays; 
+			//qglUnlockArraysEXT = GLUnlockArrays;
+
+			//LockArrays = TRUE;
+			//varrayenabled = TRUE;
  
 			ri.Printf( PRINT_ALL, "...using GL_EXT_compiled_vertex_array\n" );
 		}
@@ -486,10 +501,12 @@ static void GLW_InitExtensions( void )
 		}
 	}
 
+	/*
 	else
 	{
 		ri.Printf( PRINT_ALL, "...GL_EXT_compiled_vertex_array not found\n" );
 	}
+	*/
 }
 
 void GLimp_Init(void)
@@ -528,29 +545,26 @@ void GLimp_Init(void)
 	GLW_InitExtensions();
 	GLW_InitGamma();
 
-	//if (!glConfig.isFullscreen)
 	if (glConfig.isFullscreen)
 	{
 		// Clear the mouse pointer in window mode
 		#ifdef __PPC__
 		mousePtr = (unsigned short *)AllocVecPPC( 8, MEMF_CHIP|MEMF_CLEAR, 0 );
 		#else
-		mousePtr = AllocVec( 8, MEMF_CHIP|MEMF_CLEAR);
+		mousePtr = (unsigned short *)AllocVec( 8, MEMF_CHIP|MEMF_CLEAR);
 		#endif
 
 		if (mousePtr)
-		{
-			SetPointer( (struct Window *)mglGetWindowHandle(), mousePtr, 0, 0, 0, 0 );
-			//SetPointer( win, mousePtr, 0, 0, 0, 0 );
-		}
+			SetPointer( win, mousePtr, 0, 0, 0, 0 );
 	}
 
+	// clear window  Cowcat
+	qglClearColor( 0, 0, 0, 1 );
+	qglClear ( GL_COLOR_BUFFER_BIT );
 }
 
 void GLimp_Shutdown(void)
 {
-	// TODO: does MiniGL showhow free the pointer automatically because this gives guru
-
 	if (mousePtr)
 	{
 		ClearPointer(win);
@@ -563,7 +577,7 @@ void GLimp_Shutdown(void)
 		
 		mousePtr = 0;
 	}
-	
+
 	GLW_RestoreGamma();
 	GLW_Shutdown();
 	QGL_Shutdown();
@@ -586,18 +600,14 @@ void GLimp_LogComment( char *comment )
 
 void GLimp_EndFrame(void)
 {
-	//Com_Printf("EndFrame...\n");
-
 	if (r_finish->modified)
 	{
 		mglEnableSync(r_finish->integer);
 		r_finish->modified = qfalse;
 	}
 	
-	mglUnlockDisplay();
-	//Com_Printf("switch\n");
+	mglUnlockDisplay(); // why if we are using SMART lock ? - Cowcat
 	mglSwitchDisplay();
-	//Com_Printf("...EndFrame\n");
 
 	/*
 	if (!r_fullscreen->integer && !in_nograb->integer)

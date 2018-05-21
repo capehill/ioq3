@@ -193,7 +193,7 @@ float	BigFloat (const float *l) {return _BigFloat(l);}
 float	LittleFloat (const float *l) {return _LittleFloat(l);}
 */
 
-short	ShortSwap (short l)
+short ShortSwap (short l)
 {
 	byte	b1,b2;
 
@@ -203,13 +203,14 @@ short	ShortSwap (short l)
 	return (b1<<8) + b2;
 }
 
-short	ShortNoSwap (short l)
+short ShortNoSwap (short l)
 {
 	return l;
 }
 
-int    LongSwap (int l)
+int LongSwap (int l)
 {
+	#if 1
 	byte	b1,b2,b3,b4;
 
 	b1 = l&255;
@@ -218,9 +219,12 @@ int    LongSwap (int l)
 	b4 = (l>>24)&255;
 
 	return ((int)b1<<24) + ((int)b2<<16) + ((int)b3<<8) + b4;
+	#endif
+
+	//return (l<<24) | ((l<<8) & 0xff0000) | ((l>>8) & 0xff00) | (l>>24) ;
 }
 
-int	LongNoSwap (int l)
+int LongNoSwap (int l)
 {
 	return l;
 }
@@ -246,6 +250,28 @@ qint64 Long64NoSwap (qint64 ll)
 	return ll;
 }
 
+#if defined(AMIGA) && defined(__VBCC__) && defined (__PPC__)
+
+int __LittleLong(__reg("r4") int) =
+	"\trlwinm\t3,4,24,0,31\n"
+	"\trlwimi\t3,4,8,8,15\n"
+	"\trlwimi\t3,4,8,24,31";
+
+#define LittleL(x) __LittleLong(x)
+
+float FloatSwap (const float *f)
+{
+	floatint_t out;
+
+	out.f = *f;
+	//out.ui = LongSwap(out.ui);
+	out.ui = LittleL(out.ui);
+
+	return out.f;
+}
+
+#else
+
 float FloatSwap (const float *f)
 {
 	floatint_t out;
@@ -255,6 +281,9 @@ float FloatSwap (const float *f)
 
 	return out.f;
 }
+
+#endif
+
 
 float FloatNoSwap (const float *f)
 {
@@ -387,9 +416,9 @@ static char *SkipWhitespace( char *data, qboolean *hasNewLines )
 
 int COM_Compress( char *data_p )
 {
-	char *in, *out;
-	int c;
-	qboolean newline = qfalse, whitespace = qfalse;
+	char		*in, *out;
+	int 		c;
+	qboolean 	newline = qfalse, whitespace = qfalse;
 
 	in = out = data_p;
 
@@ -484,9 +513,11 @@ int COM_Compress( char *data_p )
 				}
 			}
 		}
+
+		*out = 0; // fix Cowcat
 	}
 
-	*out = 0;
+	//*out = 0; // Cowcat
 	return out - data_p;
 }
 
@@ -633,6 +664,7 @@ Skips until a matching close brace is found.
 Internal brace depths are properly skipped.
 =================
 */
+#if 0
 void SkipBracedSection (char **program)
 {
 	char	*token;
@@ -659,6 +691,34 @@ void SkipBracedSection (char **program)
 
 	} while( depth && *program );
 }
+
+#else
+qboolean SkipBracedSection (char **program, int depth)
+{
+	char	*token;
+
+	do
+	{
+		token = COM_ParseExt( program, qtrue );
+
+		if( token[1] == 0 )
+		{
+			if( token[0] == '{' )
+			{
+				depth++;
+			}
+
+			else if( token[0] == '}' )
+			{
+				depth--;
+			}
+		}
+
+	} while( depth && *program );
+
+	return (depth == 0);
+}
+#endif
 
 /*
 =================

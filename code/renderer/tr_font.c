@@ -94,7 +94,8 @@ static fontInfo_t registeredFont[MAX_FONTS];
 
 #ifdef BUILD_FREETYPE
 
-void R_GetGlyphInfo(FT_GlyphSlot glyph, int *left, int *right, int *width, int *top, int *bottom, int *height, int *pitch) {
+void R_GetGlyphInfo(FT_GlyphSlot glyph, int *left, int *right, int *width, int *top, int *bottom, int *height, int *pitch)
+{
 
   *left  = _FLOOR( glyph->metrics.horiBearingX );
   *right = _CEIL( glyph->metrics.horiBearingX + glyph->metrics.width );
@@ -107,7 +108,8 @@ void R_GetGlyphInfo(FT_GlyphSlot glyph, int *left, int *right, int *width, int *
 }
 
 
-FT_Bitmap *R_RenderGlyph(FT_GlyphSlot glyph, glyphInfo_t* glyphOut) {
+FT_Bitmap *R_RenderGlyph(FT_GlyphSlot glyph, glyphInfo_t* glyphOut)
+{
 
   FT_Bitmap  *bit2;
   int left, right, width, top, bottom, height, pitch, size;
@@ -146,7 +148,8 @@ FT_Bitmap *R_RenderGlyph(FT_GlyphSlot glyph, glyphInfo_t* glyphOut) {
   return NULL;
 }
 
-void WriteTGA (char *filename, byte *data, int width, int height) {
+void WriteTGA (char *filename, byte *data, int width, int height)
+{
 	byte	*buffer;
 	int		i, c;
 
@@ -178,7 +181,9 @@ void WriteTGA (char *filename, byte *data, int width, int height) {
 	Z_Free (buffer);
 }
 
-static glyphInfo_t *RE_ConstructGlyphInfo(unsigned char *imageOut, int *xOut, int *yOut, int *maxHeight, FT_Face face, const unsigned char c, qboolean calcHeight) {
+static glyphInfo_t *RE_ConstructGlyphInfo(unsigned char *imageOut, int *xOut, int *yOut, int *maxHeight, 
+		FT_Face face, const unsigned char c, qboolean calcHeight)
+{
   int i;
   static glyphInfo_t glyph;
   unsigned char *src, *dst;
@@ -335,21 +340,21 @@ float readFloat( void )
 void RE_RegisterFont(const char *fontName, int pointSize, fontInfo_t *font)
 {
 	#ifdef BUILD_FREETYPE
-  	FT_Face face;
-  	int j, k, xOut, yOut, lastStart, imageNumber;
-  	int scaledSize, newSize, maxHeight, left, satLevels;
-  	unsigned char *out, *imageBuff;
-  	glyphInfo_t *glyph;
-  	image_t *image;
-  	qhandle_t h;
-	float max;
+  	FT_Face 	face;
+  	int 		j, k, xOut, yOut, lastStart, imageNumber;
+  	int 		scaledSize, newSize, maxHeight, left, satLevels;
+  	unsigned char 	*out, *imageBuff;
+  	glyphInfo_t 	*glyph;
+  	image_t 	*image;
+  	qhandle_t 	h;
+	float 		max;
 	#endif
 
-  	void *faceData;
-	int i, len;
-  	char name[1024];
-	float dpi = 72;			//
-	float glyphScale =  72.0f / dpi; // change the scale to be relative to 1 based on 72 dpi ( so dpi of 144 means a scale of .5 )
+  	void	*faceData;
+	int	i, len;
+  	char	name[1024];
+	float	dpi = 72;		//
+	float	glyphScale =  72.0f / dpi; // change the scale to be relative to 1 based on 72 dpi ( so dpi of 144 means a scale of .5 )
 
   	if (!fontName)
 	{
@@ -366,7 +371,7 @@ void RE_RegisterFont(const char *fontName, int pointSize, fontInfo_t *font)
 	glyphScale *= 48.0f / pointSize;
 
 	// make sure the render thread is stopped
-	R_SyncRenderThread();
+	R_IssuePendingRenderCommands();
 
   	if (registeredFontCount >= MAX_FONTS)
 	{
@@ -423,6 +428,7 @@ void RE_RegisterFont(const char *fontName, int pointSize, fontInfo_t *font)
 		}
 
 	  	Com_Memcpy(&registeredFont[registeredFontCount++], font, sizeof(fontInfo_t));
+		ri.FS_FreeFile(faceData); // fix temp memory present all time - Cowcat
 		return;
 	}
 
@@ -464,8 +470,7 @@ void RE_RegisterFont(const char *fontName, int pointSize, fontInfo_t *font)
   	// make a 256x256 image buffer, once it is full, register it, clean it and keep going 
   	// until all glyphs are rendered
 
-  	//out = Z_Malloc(1024*1024);
-	out = Z_Malloc(256*256); // fix - Cowcat
+	out = Z_Malloc(256*256);
 
   	if (out == NULL)
 	{
@@ -473,8 +478,7 @@ void RE_RegisterFont(const char *fontName, int pointSize, fontInfo_t *font)
     		return;
   	}
 
-  	//Com_Memset(out, 0, 1024*1024);
-	Com_Memset(out, 0, 256*256); // fix - Cowcat
+	Com_Memset(out, 0, 256*256);
 
   	maxHeight = 0;
 
@@ -546,8 +550,7 @@ void RE_RegisterFont(const char *fontName, int pointSize, fontInfo_t *font)
       			}
 
       			lastStart = i;
-		  	//Com_Memset(out, 0, 1024*1024);
-			Com_Memset(out, 0, 256*256); // fix - Cowcat
+			Com_Memset(out, 0, 256*256);
       			xOut = 0;
       			yOut = 0;
       			Z_Free(imageBuff);

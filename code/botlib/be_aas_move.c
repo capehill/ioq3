@@ -122,31 +122,26 @@ void AAS_InitSettings(void)
 //===========================================================================
 int AAS_AgainstLadder(vec3_t origin)
 {
-	int		areanum, i, facenum, side;
-	vec3_t		org;
-	aas_plane_t	*plane;
-	aas_face_t	*face;
-	aas_area_t	*area;
+	int areanum, i, facenum, side;
+	vec3_t org;
+	aas_plane_t *plane;
+	aas_face_t *face;
+	aas_area_t *area;
 
 	VectorCopy(origin, org);
 	areanum = AAS_PointAreaNum(org);
-
 	if (!areanum)
 	{
 		org[0] += 1;
 		areanum = AAS_PointAreaNum(org);
-
 		if (!areanum)
 		{
 			org[1] += 1;
 			areanum = AAS_PointAreaNum(org);
-
 			if (!areanum)
 			{
 				org[0] -= 2;
-
 				areanum = AAS_PointAreaNum(org);
-
 				if (!areanum)
 				{
 					org[1] -= 2;
@@ -155,7 +150,6 @@ int AAS_AgainstLadder(vec3_t origin)
 			} //end if
 		} //end if
 	} //end if
-
 	//if in solid... wrrr shouldn't happen
 	if (!areanum) return qfalse;
 	//if not in a ladder area
@@ -164,27 +158,23 @@ int AAS_AgainstLadder(vec3_t origin)
 	if (!(aasworld.areasettings[areanum].presencetype & PRESENCE_NORMAL)) return qfalse;
 	//
 	area = &aasworld.areas[areanum];
-
 	for (i = 0; i < area->numfaces; i++)
 	{
 		facenum = aasworld.faceindex[area->firstface + i];
 		side = facenum < 0;
 		face = &aasworld.faces[abs(facenum)];
-
 		//if the face isn't a ladder face
 		if (!(face->faceflags & FACE_LADDER)) continue;
 		//get the plane the face is in
 		plane = &aasworld.planes[face->planenum ^ side];
-
 		//if the origin is pretty close to the plane
-		if (fabs(DotProduct(plane->normal, origin) - plane->dist) < 3) // was abs - Cowcat
+		if (fabs(DotProduct(plane->normal, origin) - plane->dist) < 3) // Cowcat
 		{
 			if (AAS_PointInsideFace(abs(facenum), origin, 0.1f)) return qtrue;
 		} //end if
 	} //end for
 	return qfalse;
 } //end of the function AAS_AgainstLadder
-
 //===========================================================================
 // returns qtrue if the bot is on the ground
 //
@@ -392,18 +382,6 @@ void AAS_Accelerate(vec3_t velocity, float frametime, vec3_t wishdir, float wish
 	}
 } //end of the function AAS_Accelerate
 //===========================================================================
-//
-// Parameter:			-
-// Returns:				-
-// Changes Globals:		-
-//===========================================================================
-void AAS_AirControl(vec3_t start, vec3_t end, vec3_t velocity, vec3_t cmdmove)
-{
-	vec3_t dir;
-
-	VectorSubtract(end, start, dir);
-} //end of the function AAS_AirControl
-//===========================================================================
 // applies ground friction to the given velocity
 //
 // Parameter:			-
@@ -528,7 +506,8 @@ int AAS_ClientMovementPrediction(struct aas_clientmove_s *move,
 	float phys_maxstep, phys_maxsteepness, phys_jumpvel, friction;
 	float gravity, delta, maxvel, wishspeed, accelerate;
 	//float velchange, newvel;
-	int n, i, j, pc, step, swimming, ax, crouch, event, jump_frame, areanum;
+	//int ax;
+	int n, i, j, pc, step, swimming, crouch, event, jump_frame, areanum;
 	int areas[20], numareas;
 	vec3_t points[20];
 	vec3_t org, end, feet, start, stepend, lastorg, wishdir;
@@ -574,7 +553,7 @@ int AAS_ClientMovementPrediction(struct aas_clientmove_s *move,
 		//if on the ground or swimming
 		if (onground || swimming)
 		{
-			friction = swimming ? phys_friction : phys_waterfriction;
+			friction = swimming ? phys_waterfriction : phys_friction;
 			//apply friction
 			VectorScale(frame_test_vel, 1/frametime, frame_test_vel);
 			AAS_ApplyFriction(frame_test_vel, friction, phys_stopspeed, frametime);
@@ -584,7 +563,7 @@ int AAS_ClientMovementPrediction(struct aas_clientmove_s *move,
 		//apply command movement
 		if (n < cmdframes)
 		{
-			ax = 0;
+			//ax = 0;
 			maxvel = phys_maxwalkvelocity;
 			accelerate = phys_airaccelerate;
 			VectorCopy(cmdmove, wishdir);
@@ -608,13 +587,13 @@ int AAS_ClientMovementPrediction(struct aas_clientmove_s *move,
 				{
 					accelerate = phys_walkaccelerate;
 				} //end else
-				ax = 2;
+				//ax = 2;
 			} //end if
 			if (swimming)
 			{
 				maxvel = phys_maxswimvelocity;
 				accelerate = phys_swimaccelerate;
-				ax = 3;
+				//ax = 3;
 			} //end if
 			else
 			{

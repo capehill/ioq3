@@ -24,20 +24,32 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include <stddef.h>   //added Cowcat
 
-#if defined(AMIGA) && defined(__VBCC__) && defined(__PPC__)
+#if defined(AMIGA) && defined(__VBCC__)
 
 #undef LittleShort
 #undef LittleLong
 
+#if defined (__PPC__)
+
 short __LittleShort(__reg("r4") short ) =
-	"\trlwinm\t0,4,8,16,24\n"
-	"\trlwimi\t0,4,24,24,31\n"
-	"\textsh\t3,0";
+	"\trlwinm\t3,4,24,24,31\n"
+	"\trlwimi\t3,4,8,16,23";
 
 int __LittleLong(__reg("r4") int) =
 	"\trlwinm\t3,4,24,0,31\n"
 	"\trlwimi\t3,4,8,8,15\n"
 	"\trlwimi\t3,4,8,24,31";
+
+#else // 68k
+
+short __LittleShort(__reg("d0") short ) =
+	"\trol.w\t#8,d0";
+
+int __LittleLong(__reg("d0") int) =
+	"\trol.w\t#8,d0\n"
+	"\tswap\td0\n"
+	"\trol.w\t#8,d0";
+#endif
 
 #define LittleShort(x) __LittleShort(x)
 #define LittleLong(x) __LittleLong(x)
@@ -136,13 +148,13 @@ bit functions
 */
 
 // negative bit values include signs
-void MSG_WriteBits( msg_t *msg, int value, int bits ) // new ioq3 fixes
+void MSG_WriteBits( msg_t *msg, int value, int bits )
 {
 	int	i;
 
 	oldsize += bits;
 	 
-	if(msg->overflowed) // new ioq3 - Cowcat
+	if(msg->overflowed)
 		return;
 
 	if ( bits == 0 || bits < -31 || bits > 32 )
@@ -157,7 +169,7 @@ void MSG_WriteBits( msg_t *msg, int value, int bits ) // new ioq3 fixes
 
 	if (msg->oob)
 	{
-		if(msg->cursize + ( bits >> 3 ) > msg->maxsize) // new ioq3 -Cowcat
+		if(msg->cursize + ( bits >> 3 ) > msg->maxsize)
 		{
 			msg->overflowed = qtrue;
 			return;
@@ -174,6 +186,7 @@ void MSG_WriteBits( msg_t *msg, int value, int bits ) // new ioq3 fixes
 		{
 			unsigned short *sp = (unsigned short *)&msg->data[msg->cursize];
 			*sp = LittleShort(value);
+
 			msg->cursize += 2;
 			msg->bit += 16;
 		}
@@ -182,6 +195,7 @@ void MSG_WriteBits( msg_t *msg, int value, int bits ) // new ioq3 fixes
 		{
 			unsigned int *ip = (unsigned int *)&msg->data[msg->cursize];
 			*ip = LittleLong(value);
+
 			msg->cursize += 4;
 			msg->bit += 32;
 		}
@@ -201,13 +215,13 @@ void MSG_WriteBits( msg_t *msg, int value, int bits ) // new ioq3 fixes
 			int nbits;
 			nbits = bits&7;
 
-			if(msg->bit + nbits > msg->maxsize << 3) // new ioq3 -Cowcat
+			if(msg->bit + nbits > msg->maxsize << 3)
 			{	
 				msg->overflowed = qtrue;
 				return;
 			}
 
-			for(i=0;i<nbits;i++)
+			for(i=0; i<nbits; i++)
 			{
 				Huff_putBit((value&1), msg->data, &msg->bit);
 				value = (value>>1);
@@ -218,13 +232,12 @@ void MSG_WriteBits( msg_t *msg, int value, int bits ) // new ioq3 fixes
 
 		if (bits)
 		{
-			for(i=0;i<bits;i+=8)
+			for(i=0; i<bits; i+=8)
 			{
-				//Huff_offsetTransmit (&msgHuff.compressor, (value&0xff), msg->data, &msg->bit);
-				Huff_offsetTransmit (&msgHuff.compressor, (value&0xff), msg->data, &msg->bit, msg->maxsize << 3); // new ioq3 -Cowcat
+				Huff_offsetTransmit (&msgHuff.compressor, (value&0xff), msg->data, &msg->bit, msg->maxsize << 3);
 				value = (value>>8);
 
-				if(msg->bit > msg->maxsize << 3) // new ioq3 -Cowcat
+				if(msg->bit > msg->maxsize << 3)
 				{	
 					msg->overflowed = qtrue;
 					return;
@@ -243,7 +256,7 @@ int MSG_ReadBits( msg_t *msg, int bits )
 	qboolean	sgn;
 	int		i, nbits;
 
-	if(msg->readcount > msg->cursize) // new ioq3 -Cowcat
+	if(msg->readcount > msg->cursize)
 		return 0;
 	
 	value = 0;
@@ -261,7 +274,7 @@ int MSG_ReadBits( msg_t *msg, int bits )
 
 	if (msg->oob)
 	{
-		if(msg->readcount + ( bits >> 3 ) > msg->cursize) // new ioq3 -Cowcat
+		if(msg->readcount + ( bits >> 3 ) > msg->cursize)
 		{
 			msg->readcount = msg->cursize + 1;
 			return 0;
@@ -278,6 +291,7 @@ int MSG_ReadBits( msg_t *msg, int bits )
 		{
 			unsigned short *sp = (unsigned short *)&msg->data[msg->readcount];
 			value = LittleShort(*sp);
+
 			msg->readcount += 2;
 			msg->bit += 16;
 		}
@@ -286,6 +300,7 @@ int MSG_ReadBits( msg_t *msg, int bits )
 		{
 			unsigned int *ip = (unsigned int *)&msg->data[msg->readcount];
 			value = LittleLong(*ip);
+			
 			msg->readcount += 4;
 			msg->bit += 32;
 		}
@@ -305,13 +320,13 @@ int MSG_ReadBits( msg_t *msg, int bits )
 		{
 			nbits = bits&7;
 
-			if(msg->bit + nbits > msg->cursize << 3) // new ioq3 -Cowcat
+			if(msg->bit + nbits > msg->cursize << 3)
 			{	
 				msg->readcount = msg->cursize + 1;
 				return 0;
 			}
 
-			for(i=0;i<nbits;i++)
+			for(i=0; i<nbits; i++)
 			{
 				value |= (Huff_getBit(msg->data, &msg->bit)<<i);
 			}
@@ -321,13 +336,12 @@ int MSG_ReadBits( msg_t *msg, int bits )
 
 		if (bits)
 		{
-			for(i=0;i<bits;i+=8)
+			for(i=0; i<bits; i+=8)
 			{
-				//Huff_offsetReceive (msgHuff.decompressor.tree, &get, msg->data, &msg->bit);
-				Huff_offsetReceive (msgHuff.decompressor.tree, &get, msg->data, &msg->bit, msg->cursize << 3); // new ioq3 -Cowcat
+				Huff_offsetReceive (msgHuff.decompressor.tree, &get, msg->data, &msg->bit, msg->cursize << 3);
 				value |= (get<<(i+nbits));
 				
-				if(msg->bit > msg->cursize << 3) // new ioq3 -Cowcat
+				if(msg->bit > msg->cursize << 3)
 				{	
 					msg->readcount = msg->cursize + 1;
 					return 0;
@@ -339,7 +353,7 @@ int MSG_ReadBits( msg_t *msg, int bits )
 		msg->readcount = (msg->bit>>3)+1;
 	}
 
-	if ( sgn && bits > 0 && bits < 32) // new ioq3 -Cowcat
+	if ( sgn && bits > 0 && bits < 32)
 	{
 		if ( value & ( 1 << ( bits - 1 ) ) )
 		{
@@ -419,7 +433,7 @@ void MSG_WriteString( msg_t *sb, const char *s )
 
 	else
 	{
-		int	l,i;
+		int	l, i;
 		char	string[MAX_STRING_CHARS];
 
 		l = strlen( s );
@@ -433,10 +447,10 @@ void MSG_WriteString( msg_t *sb, const char *s )
 
 		Q_strncpyz( string, s, sizeof( string ) );
 
-		// get rid of 0xff chars, because old clients don't like them
+		// get rid of 0x80+ and '%' chars, because old clients don't like them
 		for ( i = 0 ; i < l ; i++ )
 		{
-			if ( ((byte *)string)[i] > 127 )
+			if ( ((byte *)string)[i] > 127 || string[i] == '%' )
 			{
 				string[i] = '.';
 			}
@@ -455,7 +469,7 @@ void MSG_WriteBigString( msg_t *sb, const char *s )
 
 	else
 	{
-		int	l,i;
+		int	l, i;
 		char	string[BIG_INFO_STRING];
 
 		l = strlen( s );
@@ -469,10 +483,10 @@ void MSG_WriteBigString( msg_t *sb, const char *s )
 
 		Q_strncpyz( string, s, sizeof( string ) );
 
-		// get rid of 0xff chars, because old clients don't like them
+		// get rid of 0x80+ and '%' chars, because old clients don't like them
 		for ( i = 0 ; i < l ; i++ )
 		{
-			if ( ((byte *)string)[i] > 127 )
+			if ( ((byte *)string)[i] > 127 || string[i] == '%' )
 			{
 				string[i] = '.';
 			}
@@ -593,7 +607,8 @@ char *MSG_ReadString( msg_t *msg )
 	{
 		c = MSG_ReadByte(msg);		// use ReadByte so -1 is out of bounds
 
-		if ( c == -1 || c == 0 )
+		//if ( c == -1 || c == 0 )
+		if ( c <= 0 ) // Quake3e - Cowcat
 		{
 			break;
 		}
@@ -631,7 +646,8 @@ char *MSG_ReadBigString( msg_t *msg )
 	{
 		c = MSG_ReadByte(msg);		// use ReadByte so -1 is out of bounds
 
-		if ( c == -1 || c == 0 )
+		//if ( c == -1 || c == 0 )
+		if ( c <= 0 ) // Quake3e - Cowcat
 		{
 			break;
 		}
@@ -661,7 +677,7 @@ char *MSG_ReadBigString( msg_t *msg )
 char *MSG_ReadStringLine( msg_t *msg )
 {
 	static char	string[MAX_STRING_CHARS];
-	int		l,c;
+	int		l, c;
 
 	l = 0;
 
@@ -669,7 +685,8 @@ char *MSG_ReadStringLine( msg_t *msg )
 	{
 		c = MSG_ReadByte(msg);		// use ReadByte so -1 is out of bounds
 
-		if (c == -1 || c == 0 || c == '\n')
+		//if (c == -1 || c == 0 || c == '\n')
+		if ( c <= 0 || c == '\n') // Quake3e - Cowcat
 		{
 			break;
 		}
@@ -711,6 +728,26 @@ void MSG_ReadData( msg_t *msg, void *data, int len )
 	}
 }
 
+// a string hasher which gives the same hash value even if the
+// string is later modified via the legacy MSG read/write code
+int MSG_HashKey(const char *string, int maxlen)
+{
+	int hash, i;
+
+	hash = 0;
+
+	for (i = 0; i < maxlen && string[i] != '\0'; i++)
+	{
+		if (string[i] & 0x80 || string[i] == '%')
+			hash += '.' * (119 + i);
+
+		else
+			hash += string[i] * (119 + i);
+	}
+
+	hash = (hash ^ (hash >> 10) ^ (hash >> 20));
+	return hash;
+}
 
 /*
 =============================================================================
@@ -722,7 +759,7 @@ delta functions
 
 extern cvar_t *cl_shownet;
 
-#define LOG(x) if( cl_shownet->integer == 4 ) { Com_Printf("%s ", x ); };
+#define LOG(x) if( cl_shownet && cl_shownet->integer == 4 ) { Com_Printf("%s ", x ); };
 
 void MSG_WriteDelta( msg_t *msg, int oldV, int newV, int bits )
 {
@@ -809,7 +846,7 @@ int MSG_ReadDeltaKey( msg_t *msg, int key, int oldV, int bits )
 {
 	if ( MSG_ReadBits( msg, 1 ) )
 	{
-		return MSG_ReadBits( msg, bits ) ^ (key & kbitmask[bits]);
+		return MSG_ReadBits( msg, bits ) ^ (key & kbitmask[ bits - 1 ]);
 	}
 
 	return oldV;
@@ -851,77 +888,6 @@ usercmd_t communication
 
 ============================================================================
 */
-
-// ms is allways sent, the others are optional
-#define CM_ANGLE1	(1<<0)
-#define CM_ANGLE2	(1<<1)
-#define CM_ANGLE3	(1<<2)
-#define CM_FORWARD	(1<<3)
-#define CM_SIDE		(1<<4)
-#define CM_UP		(1<<5)
-#define CM_BUTTONS	(1<<6)
-#define CM_WEAPON	(1<<7)
-
-
-#if 0 // Not used - Cowcat
-/*
-=====================
-MSG_WriteDeltaUsercmd
-=====================
-*/
-void MSG_WriteDeltaUsercmd( msg_t *msg, usercmd_t *from, usercmd_t *to )
-{
-	if ( to->serverTime - from->serverTime < 256 )
-	{
-		MSG_WriteBits( msg, 1, 1 );
-		MSG_WriteBits( msg, to->serverTime - from->serverTime, 8 );
-	}
-
-	else
-	{
-		MSG_WriteBits( msg, 0, 1 );
-		MSG_WriteBits( msg, to->serverTime, 32 );
-	}
-
-	MSG_WriteDelta( msg, from->angles[0], to->angles[0], 16 );
-	MSG_WriteDelta( msg, from->angles[1], to->angles[1], 16 );
-	MSG_WriteDelta( msg, from->angles[2], to->angles[2], 16 );
-	MSG_WriteDelta( msg, from->forwardmove, to->forwardmove, 8 );
-	MSG_WriteDelta( msg, from->rightmove, to->rightmove, 8 );
-	MSG_WriteDelta( msg, from->upmove, to->upmove, 8 );
-	MSG_WriteDelta( msg, from->buttons, to->buttons, 16 );
-	MSG_WriteDelta( msg, from->weapon, to->weapon, 8 );
-}
-
-
-/*
-=====================
-MSG_ReadDeltaUsercmd
-=====================
-*/
-void MSG_ReadDeltaUsercmd( msg_t *msg, usercmd_t *from, usercmd_t *to )
-{
-	if ( MSG_ReadBits( msg, 1 ) )
-	{
-		to->serverTime = from->serverTime + MSG_ReadBits( msg, 8 );
-	}
-
-	else
-	{
-		to->serverTime = MSG_ReadBits( msg, 32 );
-	}
-
-	to->angles[0] = MSG_ReadDelta( msg, from->angles[0], 16);
-	to->angles[1] = MSG_ReadDelta( msg, from->angles[1], 16);
-	to->angles[2] = MSG_ReadDelta( msg, from->angles[2], 16);
-	to->forwardmove = MSG_ReadDelta( msg, from->forwardmove, 8);
-	to->rightmove = MSG_ReadDelta( msg, from->rightmove, 8);
-	to->upmove = MSG_ReadDelta( msg, from->upmove, 8);
-	to->buttons = MSG_ReadDelta( msg, from->buttons, 16);
-	to->weapon = MSG_ReadDelta( msg, from->weapon, 8);
-}
-
-#endif
 
 
 /*
@@ -1289,8 +1255,8 @@ void MSG_WriteDeltaEntity( msg_t *msg, struct entityState_s *from, struct entity
 
 			if (fullFloat == 0.0f)
 			{
-					MSG_WriteBits( msg, 0, 1 );
-					oldsize += FLOAT_INT_BITS;
+				MSG_WriteBits( msg, 0, 1 );
+				oldsize += FLOAT_INT_BITS;
 			}
 
 			else
@@ -1375,7 +1341,7 @@ void MSG_ReadDeltaEntity( msg_t *msg, entityState_t *from, entityState_t *to, in
 		Com_Memset( to, 0, sizeof( *to ) );	
 		to->number = MAX_GENTITIES - 1;
 
-		if ( cl_shownet->integer >= 2 || cl_shownet->integer == -1 )
+		if ( cl_shownet && (cl_shownet->integer >= 2 || cl_shownet->integer == -1) ) // fix - Cowcat
 		{
 			Com_Printf( "%3i: #%-3i remove\n", msg->readcount, number );
 		}
@@ -1396,7 +1362,7 @@ void MSG_ReadDeltaEntity( msg_t *msg, entityState_t *from, entityState_t *to, in
 
 	// shownet 2/3 will interleave with other printed info, -1 will
 	// just print the delta records`
-	if ( cl_shownet->integer >= 2 || cl_shownet->integer == -1 )
+	if ( cl_shownet && (cl_shownet->integer >= 2 || cl_shownet->integer == -1 ) ) // fix - Cowcat
 	{
 		print = 1;
 		Com_Printf( "%3i: #%-3i ", msg->readcount, to->number );
@@ -1573,7 +1539,7 @@ netField_t playerStateFields[] =
 { "grapplePoint[0]",92 , 0 },
 { "grapplePoint[1]",96 , 0 },
 { "grapplePoint[2]",100 , 0 },
-{ "jumppad_ent",448 , GENTITYNUM_BITS }, // was 10 - Cowcat
+{ "jumppad_ent",448 , GENTITYNUM_BITS },
 { "loopSound",444 , 16 }
 };
 
@@ -1881,7 +1847,7 @@ void MSG_ReadDeltaPlayerstate (msg_t *msg, playerState_t *from, playerState_t *t
 
 	// shownet 2/3 will interleave with other printed info, -2 will
 	// just print the delta records
-	if ( cl_shownet->integer >= 2 || cl_shownet->integer == -2 )
+	if ( cl_shownet && (cl_shownet->integer >= 2 || cl_shownet->integer == -2 ) ) // fix - Cowcat
 	{
 		print = 1;
 		Com_Printf( "%3i: playerstate ", msg->readcount );

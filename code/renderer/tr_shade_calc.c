@@ -22,10 +22,21 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // tr_shade_calc.c
 
 #include "tr_local.h"
+
 #if idppc_altivec && !defined(MACOS_X)
 #include <altivec.h>
 #endif
 
+#if 0 // some ppc test - Cowcat
+float __Q_rsqrt2(__reg("f1") float, __reg("f5") float) =
+	"\tfrsqrte\t0,1\n"
+	"\tfmsubs\t2,5,1,1\n"										
+	"\tfmuls\t4,0,0\n"		
+	"\tfnmsubs\t3,2,4,5\n"	
+	"\tfmuls\t1,3,0";
+
+#define Q_rsqrt2(x) __Q_rsqrt2(x, 1.5f)
+#endif
 
 #define WAVEVALUE( table, base, amplitude, phase, freq )  ((base) + table[ myftol( ( ( (phase) + tess.shaderTime * (freq) ) * FUNCTABLE_SIZE ) ) & FUNCTABLE_MASK ] * (amplitude))
 
@@ -93,8 +104,8 @@ static float EvalWaveFormClamped( const waveForm_t *wf )
 */
 void RB_CalcStretchTexCoords( const waveForm_t *wf, float *st )
 {
-        float p;
-        texModInfo_t tmi;
+        float		p;
+        texModInfo_t	tmi;
 
         p = 1.0f / EvalWaveForm( wf );
 
@@ -241,11 +252,11 @@ A deformation that can move an entire surface along a wave path
 */
 void RB_CalcMoveVertexes( deformStage_t *ds )
 {
-        int             i;
-        float           *xyz;
-        float           *table;
-        float           scale;
-        vec3_t          offset;
+        int	i;
+        float	*xyz;
+        float	*table;
+        float	scale;
+        vec3_t	offset;
 
         table = TableForFunc( ds->deformationWave.func );
 
@@ -367,7 +378,7 @@ static void GlobalVectorToLocal( const vec3_t in, vec3_t out )
 =====================
 AutospriteDeform
 
-Assuming all the triangles for this shader are independant
+Assuming all the triangles for this shader are independent
 quads, rebuild them as forward facing sprites
 =====================
 */
@@ -707,7 +718,7 @@ void RB_CalcColorFromOneMinusEntity( unsigned char *dstColors )
 
         for ( i = 0; i < tess.numVertexes; i++, pColors++ )
         {
-                *pColors = * ( int * ) invModulate;
+                *pColors = c;
         }
 }
 
@@ -757,7 +768,6 @@ void RB_CalcWaveColor( const waveForm_t *wf, unsigned char *dstColors )
         float   glow;
         int     *colors = ( int * ) dstColors;
         byte    color[4];
-
 
         if ( wf->func == GF_NOISE )
         {
@@ -812,10 +822,14 @@ void RB_CalcWaveAlpha( const waveForm_t *wf, unsigned char *dstColors )
 /*
 ** RB_CalcModulateColorsByFog
 */
+
 void RB_CalcModulateColorsByFog( unsigned char *colors )
 {
         int     i;
         float   texCoords[SHADER_MAX_VERTEXES][2];
+
+	//if( backEnd.refdef.rdflags & RDF_NOWORLDMODEL) // spearmint test - Cowcat
+		//return;
 
         // calculate texcoords so we can derive density
         // this is not wasted, because it would only have
@@ -824,12 +838,29 @@ void RB_CalcModulateColorsByFog( unsigned char *colors )
 
         for ( i = 0; i < tess.numVertexes; i++, colors += 4 )
         {
+		//if( texCoords[i][0] <= 0.0f || texCoords[i][1] <= 0.0f )
+			//continue;
+
                 float f = 1.0 - R_FogFactor( texCoords[i][0], texCoords[i][1] );
-                colors[0] *= f;
-                colors[1] *= f;
-                colors[2] *= f;
+
+		/*
+		if( f <= 0.0f )
+		{
+			colors[0] = 0;
+                	colors[1] = 0;
+                	colors[2] = 0;
+		}
+
+		else
+		*/
+		{
+                	colors[0] *= f;
+                	colors[1] *= f;
+                	colors[2] *= f;
+		}
         }
 }
+
 
 /*
 ** RB_CalcModulateAlphasByFog
@@ -839,6 +870,9 @@ void RB_CalcModulateAlphasByFog( unsigned char *colors )
         int     i;
         float   texCoords[SHADER_MAX_VERTEXES][2];
 
+	//if( backEnd.refdef.rdflags & RDF_NOWORLDMODEL) // spearmint test - Cowcat
+		//return;
+
         // calculate texcoords so we can derive density
         // this is not wasted, because it would only have
         // been previously called if the surface was opaque
@@ -846,8 +880,18 @@ void RB_CalcModulateAlphasByFog( unsigned char *colors )
 
         for ( i = 0; i < tess.numVertexes; i++, colors += 4 )
         {
+		//if( texCoords[i][0] <= 0.0f || texCoords[i][1] <= 0.0f )
+			//continue;
+
                 float f = 1.0 - R_FogFactor( texCoords[i][0], texCoords[i][1] );
-                colors[3] *= f;
+
+		/*
+		if( f <= 0.0f )
+			colors[3] = 0;
+
+		else
+		*/
+                	colors[3] *= f;
         }
 }
 
@@ -857,7 +901,10 @@ void RB_CalcModulateAlphasByFog( unsigned char *colors )
 void RB_CalcModulateRGBAsByFog( unsigned char *colors )
 {
         int     i;
-        float   texCoords[SHADER_MAX_VERTEXES][2] = {{0.0f}}; // added array - Cowcat
+        float   texCoords[SHADER_MAX_VERTEXES][2] = {{0.0f}};
+
+	//if( backEnd.refdef.rdflags & RDF_NOWORLDMODEL) // spearmint test - Cowcat
+		//return;
 
         // calculate texcoords so we can derive density
         // this is not wasted, because it would only have
@@ -866,11 +913,28 @@ void RB_CalcModulateRGBAsByFog( unsigned char *colors )
 
         for ( i = 0; i < tess.numVertexes; i++, colors += 4 )
         {
+		//if( texCoords[i][0] <= 0.0f || texCoords[i][1] <= 0.0f )
+			//continue;
+
                 float f = 1.0 - R_FogFactor( texCoords[i][0], texCoords[i][1] );
-                colors[0] *= f;
-                colors[1] *= f;
-                colors[2] *= f;
-                colors[3] *= f;
+
+		/*
+		if( f <= 0.0f )
+		{
+                	colors[0] = 0;
+                	colors[1] = 0;
+                	colors[2] = 0;
+                	colors[3] = 0;
+		}
+
+		else
+		*/
+		{
+			colors[0] *= f;
+                	colors[1] *= f;
+                	colors[2] *= f;
+                	colors[3] *= f;
+		}
         }
 }
 
@@ -993,15 +1057,15 @@ void RB_CalcFogTexCoords( float *st )
 }
 
 
-
 /*
 ** RB_CalcEnvironmentTexCoords
 */
+
 void RB_CalcEnvironmentTexCoords( float *st ) 
 {
         int     i;
         float   *v, *normal;
-        vec3_t  viewer, reflected;
+        vec3_t  viewer, reflected, viewOrigin;
         float   d;
 
         v = tess.xyz[0];
@@ -1012,11 +1076,11 @@ void RB_CalcEnvironmentTexCoords( float *st )
                 VectorSubtract (backEnd.or.viewOrigin, v, viewer);
                 VectorNormalizeFast (viewer);
 
-                d = DotProduct (normal, viewer);
+                d = 2 * DotProduct (normal, viewer);
 
-                reflected[0] = normal[0]*2*d - viewer[0];
-                reflected[1] = normal[1]*2*d - viewer[1];
-                reflected[2] = normal[2]*2*d - viewer[2];
+                //reflected[0] = normal[0]*d - viewer[0]; // ?? - Cowcat
+                reflected[1] = normal[1]*d - viewer[1];
+                reflected[2] = normal[2]*d - viewer[2];
 
                 st[0] = 0.5 + reflected[1] * 0.5;
                 st[1] = 0.5 - reflected[2] * 0.5;
@@ -1062,9 +1126,9 @@ void RB_CalcScaleTexCoords( const float scale[2], float *st )
 */
 void RB_CalcScrollTexCoords( const float scrollSpeed[2], float *st )
 {
-        int i;
-        float timeScale = tess.shaderTime;
-        float adjustedScrollS, adjustedScrollT;
+        int	i;
+        float	timeScale = tess.shaderTime;
+        float	adjustedScrollS, adjustedScrollT;
 
         adjustedScrollS = scrollSpeed[0] * timeScale;
         adjustedScrollT = scrollSpeed[1] * timeScale;
@@ -1103,11 +1167,11 @@ void RB_CalcTransformTexCoords( const texModInfo_t *tmi, float *st  )
 */
 void RB_CalcRotateTexCoords( float degsPerSecond, float *st )
 {
-        float timeScale = tess.shaderTime;
-        float degs;
-        int index;
-        float sinValue, cosValue;
-        texModInfo_t tmi;
+        float		timeScale = tess.shaderTime;
+        float		degs;
+        int		index;
+        float		sinValue, cosValue;
+        texModInfo_t	tmi;
 
         degs = -degsPerSecond * timeScale;
         index = degs * ( FUNCTABLE_SIZE / 360.0f );
@@ -1145,15 +1209,39 @@ long myftol( float f ) {
 */
 vec3_t lightOrigin = { -960, 1980, 96 };                // FIXME: track dynamically
 
+#if 0 // some ppc test - Cowcat
+float __rsqrt(__reg("f1") float, __reg("f5") float) =
+	"\tfrsqrte\t0,1\n"
+	"\tfmsubs\t2,5,1,1\n"										
+	"\tfmuls\t4,0,0\n"		
+	"\tfnmsubs\t3,2,4,5\n"	
+	"\tfmuls\t1,3,0";
+
+#define rsqrt(x) __rsqrt(x, 1.5)
+
+void VectorNormalizeFast2( vec3_t v )
+{
+	float ilength;
+
+	ilength = rsqrt( DotProduct( v, v ) );
+
+	v[0] *= ilength;
+	v[1] *= ilength;
+	v[2] *= ilength;
+}
+#endif
+
 void RB_CalcSpecularAlpha( unsigned char *alphas )
 {
         int             i;
         float           *v, *normal;
-        vec3_t          viewer,  reflected;
+        vec3_t          viewer, reflected;
         float           l, d;
         int             b;
         vec3_t          lightDir;
         int             numVertexes;
+
+	//ri.Printf( PRINT_ALL, "SpecularAlpha\n");
 
         v = tess.xyz[0];
         normal = tess.normal[0];
@@ -1166,7 +1254,12 @@ void RB_CalcSpecularAlpha( unsigned char *alphas )
         {
                 float ilength;
 
-                VectorSubtract( lightOrigin, v, lightDir );
+		//if( backEnd.currentEntity == &tr.worldEntity ) // test - Cowcat
+                	VectorSubtract( lightOrigin, v, lightDir );
+
+		//else
+			//VectorCopy( backEnd.currentEntity->lightDir, lightDir );
+
 //              ilength = Q_rsqrt( DotProduct( lightDir, lightDir ) );
                 VectorNormalizeFast( lightDir );
 
@@ -1221,9 +1314,7 @@ static void RB_CalcDiffuseColor_altivec( unsigned char *colors )
         vec3_t          lightDir;
         int             numVertexes;
         vector unsigned char vSel = VECCONST_UINT8(0x00, 0x00, 0x00, 0xff,
-                                               0x00, 0x00, 0x00, 0xff,
-                                               0x00, 0x00, 0x00, 0xff,
-                                               0x00, 0x00, 0x00, 0xff);
+        	0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff);
         vector float ambientLightVec;
         vector float directedLightVec;
         vector float lightDirVec;
@@ -1235,6 +1326,7 @@ static void RB_CalcDiffuseColor_altivec( unsigned char *colors )
         vector unsigned char jVecChar, normalPerm;
         ent = backEnd.currentEntity;
         ambientLightInt = ent->ambientLightInt;
+
         // A lot of this could be simplified if we made sure
         // entities light info was 16-byte aligned.
         jVecChar = vec_lvsl(0, ent->ambientLight);
@@ -1260,7 +1352,9 @@ static void RB_CalcDiffuseColor_altivec( unsigned char *colors )
 
         normalPerm = vec_lvsl(0,normal);
         numVertexes = tess.numVertexes;
-        for (i = 0 ; i < numVertexes ; i++, v += 4, normal += 4) {
+
+        for (i = 0 ; i < numVertexes ; i++, v += 4, normal += 4)
+	{
                 normalVec0 = vec_ld(0,(vector float *)normal);
                 normalVec1 = vec_ld(11,(vector float *)normal);
                 normalVec0 = vec_perm(normalVec0,normalVec1,normalPerm);
@@ -1273,7 +1367,7 @@ static void RB_CalcDiffuseColor_altivec( unsigned char *colors )
                 incomingVec0 = vec_max(incomingVec0,zero);
                 normalPerm = vec_lvsl(12,normal);
                 jVec = vec_madd(incomingVec0, directedLightVec, ambientLightVec);
-                jVecInt = vec_cts(jVec,0);      // RGBx
+                jVecInt = vec_cts(jVec,0);      		// RGBx
                 jVecShort = vec_pack(jVecInt,jVecInt);          // RGBxRGBx
                 jVecChar = vec_packsu(jVecShort,jVecShort);     // RGBxRGBxRGBxRGBx
                 jVecChar = vec_sel(jVecChar,vSel,vSel);         // RGBARGBARGBARGBA replace alpha with 255
@@ -1284,7 +1378,7 @@ static void RB_CalcDiffuseColor_altivec( unsigned char *colors )
 
 static void RB_CalcDiffuseColor_scalar( unsigned char *colors )
 {
-        int             i, j;
+        int             i, j, c;
         float           *v, *normal;
         float           incoming;
         trRefEntity_t   *ent;
@@ -1315,6 +1409,8 @@ static void RB_CalcDiffuseColor_scalar( unsigned char *colors )
                         continue;
                 }
 
+		#if 1
+
                 j = myftol( ambientLight[0] + incoming * directedLight[0] );
 
                 if ( j > 255 )
@@ -1341,6 +1437,23 @@ static void RB_CalcDiffuseColor_scalar( unsigned char *colors )
                 }
 
                 colors[i*4+2] = j;
+
+		#else // test - Cowcat
+
+		for (j = 0; j < 3; j++)
+		{
+			c = myftol( ambientLight[j] + incoming * directedLight[j] );
+
+			if ( c > 255 )
+                	{
+                        	c = 255;
+                	}
+
+			colors[i*4+j] = c;
+		}
+
+		#endif
+		
                 colors[i*4+3] = 255;
         }
 }

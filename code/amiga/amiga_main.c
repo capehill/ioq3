@@ -30,6 +30,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define __USE_BASETYPE__
 
 #pragma amiga-align
+
 #include <exec/exec.h>
 #include <exec/ports.h>
 #include <intuition/intuition.h>
@@ -186,7 +187,7 @@ void Timer_Init(void)
 	if (!TimerBase)
 		Sys_Error("Can't open timer.device");
 
-	//TimerBase = (struct Device *)FindName(&SysBase->DeviceList,"timer.device");
+	//TimerBase = (struct Library *)FindName(&SysBase->DeviceList,"timer.device");
 }
 
 void Timer_Term(void)
@@ -505,7 +506,7 @@ int main(int argc, char **argv)
 		startTime = Sys_Milliseconds();
 
 		// make sure mouse and joystick are only called once a frame
-		IN_Frame();
+		IN_Frame(); // future - in common.c - Com_Frame
 
 		// run the game
 		Com_Frame();
@@ -516,10 +517,20 @@ int main(int argc, char **argv)
 	}
 }
 
-void Sys_Sleep(int msec)
+
+void Sys_Sleep(int msec) // used in common.c/Com_Frame - never reached? - Cowcat
 {
+	// Just in case - Cowcat
+	if( msec == 0)
+		return;
+
+	if( msec < 0 )
+		msec = 10;
+	//
+
 	usleep(1000 * msec);
 }
+
 
 /*
 ** This is a replacement for the amiga.lib kprintf for PowerPC.

@@ -55,9 +55,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "inv.h"
 #include "syn.h"
 
-#ifndef MAX_PATH
-#define MAX_PATH		144
-#endif
+//#ifndef MAX_PATH
+//#define MAX_PATH		144
+//#endif
 
 
 //bot states
@@ -1151,8 +1151,10 @@ void BotReadSessionData(bot_state_t *bs) {
 BotAISetupClient
 ==============
 */
-int BotAISetupClient(int client, struct bot_settings_s *settings, qboolean restart) {
-	char filename[MAX_PATH], name[MAX_PATH], gender[MAX_PATH];
+int BotAISetupClient(int client, struct bot_settings_s *settings, qboolean restart)
+{
+	//char filename[MAX_PATH], name[MAX_PATH], gender[MAX_PATH];
+	char filename[144], name[144], gender[144]; // new Cowcat
 	bot_state_t *bs;
 	int errnum;
 
@@ -1179,8 +1181,11 @@ int BotAISetupClient(int client, struct bot_settings_s *settings, qboolean resta
 	memcpy(&bs->settings, settings, sizeof(bot_settings_t));
 	//allocate a goal state
 	bs->gs = trap_BotAllocGoalState(client);
+
 	//load the item weights
-	trap_Characteristic_String(bs->character, CHARACTERISTIC_ITEMWEIGHTS, filename, MAX_PATH);
+	//trap_Characteristic_String(bs->character, CHARACTERISTIC_ITEMWEIGHTS, filename, MAX_PATH);
+	trap_Characteristic_String(bs->character, CHARACTERISTIC_ITEMWEIGHTS, filename, sizeof(filename)); // new Cowcat
+
 	errnum = trap_BotLoadItemWeights(bs->gs, filename);
 	if (errnum != BLERR_NOERROR) {
 		trap_BotFreeGoalState(bs->gs);
@@ -1189,7 +1194,9 @@ int BotAISetupClient(int client, struct bot_settings_s *settings, qboolean resta
 	//allocate a weapon state
 	bs->ws = trap_BotAllocWeaponState();
 	//load the weapon weights
-	trap_Characteristic_String(bs->character, CHARACTERISTIC_WEAPONWEIGHTS, filename, MAX_PATH);
+	//trap_Characteristic_String(bs->character, CHARACTERISTIC_WEAPONWEIGHTS, filename, MAX_PATH);
+	trap_Characteristic_String(bs->character, CHARACTERISTIC_WEAPONWEIGHTS, filename, sizeof(filename)); // new Cowcat
+
 	errnum = trap_BotLoadWeaponWeights(bs->ws, filename);
 	if (errnum != BLERR_NOERROR) {
 		trap_BotFreeGoalState(bs->gs);
@@ -1199,8 +1206,10 @@ int BotAISetupClient(int client, struct bot_settings_s *settings, qboolean resta
 	//allocate a chat state
 	bs->cs = trap_BotAllocChatState();
 	//load the chat file
-	trap_Characteristic_String(bs->character, CHARACTERISTIC_CHAT_FILE, filename, MAX_PATH);
-	trap_Characteristic_String(bs->character, CHARACTERISTIC_CHAT_NAME, name, MAX_PATH);
+	//trap_Characteristic_String(bs->character, CHARACTERISTIC_CHAT_FILE, filename, MAX_PATH);
+	//trap_Characteristic_String(bs->character, CHARACTERISTIC_CHAT_NAME, name, MAX_PATH);
+	trap_Characteristic_String(bs->character, CHARACTERISTIC_CHAT_FILE, filename, sizeof(filename)); // new Cowcat
+	trap_Characteristic_String(bs->character, CHARACTERISTIC_CHAT_NAME, name, sizeof(name)); // new Cowcat
 	errnum = trap_BotLoadChatFile(bs->cs, filename, name);
 	if (errnum != BLERR_NOERROR) {
 		trap_BotFreeChatState(bs->cs);
@@ -1209,7 +1218,8 @@ int BotAISetupClient(int client, struct bot_settings_s *settings, qboolean resta
 		return qfalse;
 	}
 	//get the gender characteristic
-	trap_Characteristic_String(bs->character, CHARACTERISTIC_GENDER, gender, MAX_PATH);
+	//trap_Characteristic_String(bs->character, CHARACTERISTIC_GENDER, gender, MAX_PATH);
+	trap_Characteristic_String(bs->character, CHARACTERISTIC_GENDER, gender, sizeof(gender)); // new Cowcat
 	//set the chat gender
 	if (*gender == 'f' || *gender == 'F') trap_BotSetChatGender(bs->cs, CHAT_GENDERFEMALE);
 	else if (*gender == 'm' || *gender == 'M') trap_BotSetChatGender(bs->cs, CHAT_GENDERMALE);

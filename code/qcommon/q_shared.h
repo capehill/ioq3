@@ -174,7 +174,8 @@ typedef int	sfxHandle_t;
 typedef int	fileHandle_t;
 typedef int	clipHandle_t;
 
-#define PAD(x,y) (((x)+(y)-1) & ~((y)-1))
+#define PAD(base, alignment) (((base)+(alignment)-1) & ~((alignment)-1))
+#define PADP(base, alignment) ((void *) PAD((intptr_t) (base), (alignment)))
 
 #ifdef __GNUC__
 #define ALIGN(x) __attribute__((aligned(x)))
@@ -189,6 +190,7 @@ typedef int	clipHandle_t;
 #define	MAX_QINT		0x7fffffff
 #define	MIN_QINT		(-MAX_QINT-1)
 
+#define ARRAY_LEN(x)		(sizeof(x) / sizeof(*(x)))
 
 // angle indexes
 #define	PITCH			0	// up / down
@@ -407,7 +409,8 @@ extern	vec3_t	axisDefault[3];
 
 #if idppc
 
-static ID_INLINE float Q_rsqrt( float number ) {
+static ID_INLINE float Q_rsqrt( float number )
+{
 		float x = 0.5f * number;
 		float y;
 #ifdef __GNUC__            
@@ -420,7 +423,8 @@ static ID_INLINE float Q_rsqrt( float number ) {
 
 #ifdef __GNUC__
      
-static ID_INLINE float Q_fabs(float x) {
+static ID_INLINE float Q_fabs(float x)
+{
 	float abs_x;
 	
 	asm("fabs %0,%1" : "=f" (abs_x) : "f" (x));
@@ -698,7 +702,9 @@ typedef struct pc_token_s
 
 void	COM_MatchToken( char**buf_p, char *match );
 
-void SkipBracedSection (char **program);
+//void SkipBracedSection (char **program);
+qboolean SkipBracedSection (char **program, int depth);
+
 void SkipRestOfLine ( char **data );
 
 void Parse1DMatrix (char **buf_p, int x, float *m);

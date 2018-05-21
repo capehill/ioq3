@@ -410,37 +410,30 @@ S_Play_f
 */
 void S_Play_f( void )
 {
-	int		i;
+	int		i, c;
 	sfxHandle_t	h;
-	char		name[256];
 
 	if( !si.RegisterSound || !si.StartLocalSound )
 	{
 		return;
 	}
 
-	i = 1;
+	c = Cmd_Argc();
 
-	while ( i<Cmd_Argc() )
+	if( c < 2 )
 	{
-		if ( !Q_strrchr(Cmd_Argv(i), '.') )
-		{
-			Com_sprintf( name, sizeof(name), "%s.wav", Cmd_Argv(1) );
-		}
+		Com_Printf ("Usage: play <sound filename> [sound filename] [sound filename] ...\n");
+		return;
+	}
 
-		else
-		{
-			Q_strncpyz( name, Cmd_Argv(i), sizeof(name) );
-		}
-
-		h = si.RegisterSound( name, qfalse );
+	for( i = 1; i < c; i++ )
+	{
+		h = si.RegisterSound( Cmd_Argv(i), qfalse );
 
 		if( h )
 		{
 			si.StartLocalSound( h, CHAN_LOCAL_SOUND );
 		}
-
-		i++;
 	}
 }
 

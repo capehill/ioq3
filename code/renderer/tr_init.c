@@ -53,9 +53,7 @@ cvar_t	*r_znear;
 cvar_t	*r_zproj;
 cvar_t	*r_stereoSeparation;
 
-cvar_t	*r_smp;
-cvar_t	*r_showSmp;
-cvar_t	*r_skipBackEnd;
+cvar_t *r_skipBackEnd;
 
 cvar_t	*r_stereoEnabled;
 cvar_t	*r_anaglyphMode;
@@ -63,7 +61,7 @@ cvar_t	*r_anaglyphMode;
 cvar_t	*r_greyscale;
 
 cvar_t	*r_ignorehwgamma;
-cvar_t	*r_measureOverdraw;
+//cvar_t *r_measureOverdraw; // Cowcat
 
 cvar_t	*r_inGameVideo;
 cvar_t	*r_fastsky;
@@ -202,9 +200,6 @@ static void InitOpenGL( void )
 		}
 	}
 
-	// init command buffers and SMP
-	R_InitCommandBuffers();
-
 	// print info
 	GfxInfo_f();
 
@@ -293,7 +288,7 @@ vidmode_t r_vidModes[] =
 	{ "Mode  8: 1280x1024",		1280,	1024,	1 },
 	{ "Mode  9: 1600x1200",		1600,	1200,	1 },
 	{ "Mode 10: 2048x1536",		2048,	1536,	1 },
-	{ "Mode 11: 856x480 (wide)",856,	480,	1 }
+	{ "Mode 11: 856x480 (wide)",	856,	480,	1 }
 };
 
 static int s_numVidModes = ( sizeof( r_vidModes ) / sizeof( r_vidModes[0] ) );
@@ -766,10 +761,12 @@ const void *RB_TakeVideoFrameCmd( const void *data )
 /*
 ** GL_SetDefaultState
 */
+
+//extern qboolean setArraysOnce;
+
 void GL_SetDefaultState( void )
 {
 	qglClearDepth( 1.0f );
-
 	qglCullFace(GL_FRONT);
 
 	qglColor4f (1,1,1,1);
@@ -807,6 +804,11 @@ void GL_SetDefaultState( void )
 	qglEnable( GL_SCISSOR_TEST );
 	qglDisable( GL_CULL_FACE );
 	qglDisable( GL_BLEND );
+
+	//glHint (MGL_W_ONE_HINT, GL_FASTEST); 
+	//glHint (GL_PERSPECTIVE_CORRECTION_HINT, GL_FASTEST); // test - Cowcat
+
+	//setArraysOnce = qfalse;
 }
 
 
@@ -859,7 +861,8 @@ void GfxInfo_f( void )
 	}
 
 	// rendering primitives
-	{
+	{	
+		#if 0
 		int	primitives;
 
 		// default is to use triangles if compiled vertex arrays are present
@@ -868,22 +871,33 @@ void GfxInfo_f( void )
 
 		if ( primitives == 0 )
 		{
-			if ( qglLockArraysEXT ) {
+			if ( qglLockArraysEXT )
 				primitives = 2;
-			} else {
+
+			else 
 				primitives = 1;
-			}
 		}
 
-		if ( primitives == -1 ) {
+		if ( primitives == -1 )
 			ri.Printf( PRINT_ALL, "none\n" );
-		} else if ( primitives == 2 ) {
+
+		else if ( primitives == 2 )
 			ri.Printf( PRINT_ALL, "single glDrawElements\n" );
-		} else if ( primitives == 1 ) {
+
+		else if ( primitives == 1 )
 			ri.Printf( PRINT_ALL, "multiple glArrayElement\n" );
-		} else if ( primitives == 3 ) {
+
+		else if ( primitives == 3 )
 			ri.Printf( PRINT_ALL, "multiple glColor4ubv + glTexCoord2fv + glVertex3fv\n" );
-		}
+
+		#else // Cowcat
+
+		ri.Printf( PRINT_ALL, "rendering primitives: " );
+		//ri.Printf( PRINT_ALL, "single glDrawElements\n" );
+		//ri.Printf( PRINT_ALL, "multiple glColor4ubv + glTexCoord2fv + glVertex3fv\n" );
+		ri.Printf( PRINT_ALL, "multiple glArrayElement\n" );
+
+		#endif
 	}
 
 	ri.Printf( PRINT_ALL, "texturemode: %s\n", r_textureMode->string );
@@ -892,7 +906,7 @@ void GfxInfo_f( void )
 	ri.Printf( PRINT_ALL, "multitexture: %s\n", enablestrings[qglActiveTextureARB != 0] );
 	ri.Printf( PRINT_ALL, "compiled vertex arrays: %s\n", enablestrings[qglLockArraysEXT != 0 ] );
 	ri.Printf( PRINT_ALL, "texenv add: %s\n", enablestrings[glConfig.textureEnvAddAvailable != 0] );
-	ri.Printf( PRINT_ALL, "compressed textures: %s\n", enablestrings[glConfig.textureCompression!=TC_NONE] );
+	ri.Printf( PRINT_ALL, "compressed textures: %s\n", enablestrings[glConfig.textureCompression != TC_NONE] );
 
 	if ( r_vertexLight->integer || glConfig.hardwareType == GLHW_PERMEDIA2 )
 	{
@@ -907,11 +921,6 @@ void GfxInfo_f( void )
 	if ( glConfig.hardwareType == GLHW_RIVA128 )
 	{
 		ri.Printf( PRINT_ALL, "HACK: riva128 approximations\n" );
-	}
-
-	if ( glConfig.smpActive )
-	{
-		ri.Printf( PRINT_ALL, "Using dual processor acceleration\n" );
 	}
 
 	if ( r_finish->integer )
@@ -959,7 +968,7 @@ void R_Register( void )
 	r_vertexLight = ri.Cvar_Get( "r_vertexLight", "0", CVAR_ARCHIVE | CVAR_LATCH );
 	r_uiFullScreen = ri.Cvar_Get( "r_uifullscreen", "0", 0);
 	r_subdivisions = ri.Cvar_Get ("r_subdivisions", "4", CVAR_ARCHIVE | CVAR_LATCH);
-	r_smp = ri.Cvar_Get( "r_smp", "0", CVAR_ARCHIVE | CVAR_LATCH);
+	//r_smp = ri.Cvar_Get( "r_smp", "0", CVAR_ARCHIVE | CVAR_LATCH);
 	r_stereoEnabled = ri.Cvar_Get( "r_stereoEnabled", "0", CVAR_ARCHIVE | CVAR_LATCH);
 	r_ignoreFastPath = ri.Cvar_Get( "r_ignoreFastPath", "1", CVAR_ARCHIVE | CVAR_LATCH );
 	r_greyscale = ri.Cvar_Get("r_greyscale", "0", CVAR_ARCHIVE | CVAR_LATCH);
@@ -1026,10 +1035,9 @@ void R_Register( void )
 	r_flareFade = ri.Cvar_Get ("r_flareFade", "7", CVAR_CHEAT);
 	r_flareCoeff = ri.Cvar_Get ("r_flareCoeff", FLARE_STDCOEFF, CVAR_CHEAT);
 
-	r_showSmp = ri.Cvar_Get ("r_showSmp", "0", CVAR_CHEAT);
 	r_skipBackEnd = ri.Cvar_Get ("r_skipBackEnd", "0", CVAR_CHEAT);
 
-	r_measureOverdraw = ri.Cvar_Get( "r_measureOverdraw", "0", CVAR_CHEAT );
+	//r_measureOverdraw = ri.Cvar_Get( "r_measureOverdraw", "0", CVAR_CHEAT ); // Cowcat
 	r_lodscale = ri.Cvar_Get( "r_lodscale", "5", CVAR_CHEAT );
 	r_norefresh = ri.Cvar_Get ("r_norefresh", "0", CVAR_CHEAT);
 	r_drawentities = ri.Cvar_Get ("r_drawentities", "1", CVAR_CHEAT );
@@ -1145,25 +1153,12 @@ void R_Init( void )
 	if (max_polyverts < MAX_POLYVERTS)
 		max_polyverts = MAX_POLYVERTS;
 
-	ptr = ri.Hunk_Alloc( sizeof( *backEndData[0] ) + sizeof(srfPoly_t) * max_polys + sizeof(polyVert_t) * max_polyverts, h_low);
-	backEndData[0] = (backEndData_t *) ptr;
-	backEndData[0]->polys = (srfPoly_t *) ((char *) ptr + sizeof( *backEndData[0] ));
-	backEndData[0]->polyVerts = (polyVert_t *) ((char *) ptr + sizeof( *backEndData[0] ) + sizeof(srfPoly_t) * max_polys);
+	ptr = ri.Hunk_Alloc( sizeof( *backEndData ) + sizeof(srfPoly_t) * max_polys + sizeof(polyVert_t) * max_polyverts, h_low);
+	backEndData = (backEndData_t *) ptr;
+	backEndData->polys = (srfPoly_t *) ((char *) ptr + sizeof( *backEndData));
+	backEndData->polyVerts = (polyVert_t *) ((char *) ptr + sizeof( *backEndData ) + sizeof(srfPoly_t) * max_polys);
 
-	if ( r_smp->integer )
-	{
-		ptr = ri.Hunk_Alloc( sizeof( *backEndData[1] ) + sizeof(srfPoly_t) * max_polys + sizeof(polyVert_t) * max_polyverts, h_low);
-		backEndData[1] = (backEndData_t *) ptr;
-		backEndData[1]->polys = (srfPoly_t *) ((char *) ptr + sizeof( *backEndData[1] ));
-		backEndData[1]->polyVerts = (polyVert_t *) ((char *) ptr + sizeof( *backEndData[1] ) + sizeof(srfPoly_t) * max_polys);
-	}
-
-	else
-	{
-		backEndData[1] = NULL;
-	}
-
-	R_ToggleSmpFrame();
+	R_InitNextFrame();
 
 	InitOpenGL();
 
@@ -1201,13 +1196,12 @@ void RE_Shutdown( qboolean destroyWindow )
 	ri.Cmd_RemoveCommand ("shaderlist");
 	ri.Cmd_RemoveCommand ("skinlist");
 	ri.Cmd_RemoveCommand ("gfxinfo");
-	ri.Cmd_RemoveCommand( "modelist" );
-	ri.Cmd_RemoveCommand( "shaderstate" );
+	ri.Cmd_RemoveCommand ("modelist");
+	ri.Cmd_RemoveCommand ("shaderstate");
 
 	if ( tr.registered )
 	{
-		R_SyncRenderThread();
-		R_ShutdownCommandBuffers();
+		R_IssuePendingRenderCommands();
 		R_DeleteTextures();
 	}
 
@@ -1232,7 +1226,7 @@ Touch all images to make sure they are resident
 */
 void RE_EndRegistration( void )
 {
-	R_SyncRenderThread();
+	R_IssuePendingRenderCommands();
 
 	if (!Sys_LowPhysicalMemory())
 	{

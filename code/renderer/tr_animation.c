@@ -34,6 +34,101 @@ frame.
 */
 
 /*
+=============
+R_MDRCullModel
+=============
+*/
+#if 0
+static int R_MDRCullModel( md4Header_t *header, trRefEntity_t *ent )
+{
+	vec3_t		bounds[2];
+	md4Frame_t	*oldFrame, *newFrame;
+	int		i, frameSize;
+
+	frameSize = (size_t)( &((md4Frame_t *)0)->bones[ header->numBones ] );
+	
+	// compute frame pointers
+	newFrame = ( md4Frame_t * ) ( ( byte * ) header + header->ofsFrames + frameSize * ent->e.frame);
+	oldFrame = ( md4Frame_t * ) ( ( byte * ) header + header->ofsFrames + frameSize * ent->e.oldframe);
+
+	// cull bounding sphere ONLY if this is not an upscaled entity
+	if ( !ent->e.nonNormalizedAxes )
+	{
+		if ( ent->e.frame == ent->e.oldframe )
+		{
+			switch ( R_CullLocalPointAndRadius( newFrame->localOrigin, newFrame->radius ) )
+			{
+				// Ummm... yeah yeah I know we don't really have an md3 here.. but we pretend
+				// we do. After all, the purpose of mdrs are not that different, are they?
+				
+				case CULL_OUT:
+					tr.pc.c_sphere_cull_md3_out++;
+					return CULL_OUT;
+
+				case CULL_IN:
+					tr.pc.c_sphere_cull_md3_in++;
+					return CULL_IN;
+
+				case CULL_CLIP:
+					tr.pc.c_sphere_cull_md3_clip++;
+					break;
+			}
+		}
+		else
+		{
+			int sphereCull, sphereCullB;
+
+			sphereCull  = R_CullLocalPointAndRadius( newFrame->localOrigin, newFrame->radius );
+
+			if ( newFrame == oldFrame ) {
+				sphereCullB = sphereCull;
+			} else {
+				sphereCullB = R_CullLocalPointAndRadius( oldFrame->localOrigin, oldFrame->radius );
+			}
+
+			if ( sphereCull == sphereCullB )
+			{
+				if ( sphereCull == CULL_OUT )
+				{
+					tr.pc.c_sphere_cull_md3_out++;
+					return CULL_OUT;
+				}
+				else if ( sphereCull == CULL_IN )
+				{
+					tr.pc.c_sphere_cull_md3_in++;
+					return CULL_IN;
+				}
+				else
+				{
+					tr.pc.c_sphere_cull_md3_clip++;
+				}
+			}
+		}
+	}
+	
+	// calculate a bounding box in the current coordinate system
+	for (i = 0 ; i < 3 ; i++) {
+		bounds[0][i] = oldFrame->bounds[0][i] < newFrame->bounds[0][i] ? oldFrame->bounds[0][i] : newFrame->bounds[0][i];
+		bounds[1][i] = oldFrame->bounds[1][i] > newFrame->bounds[1][i] ? oldFrame->bounds[1][i] : newFrame->bounds[1][i];
+	}
+
+	switch ( R_CullLocalBox( bounds ) )
+	{
+		case CULL_IN:
+			tr.pc.c_box_cull_md3_in++;
+			return CULL_IN;
+		case CULL_CLIP:
+			tr.pc.c_box_cull_md3_clip++;
+			return CULL_CLIP;
+		case CULL_OUT:
+		default:
+			tr.pc.c_box_cull_md3_out++;
+			return CULL_OUT;
+	}
+}
+#endif
+
+/*
 ==============
 R_AddAnimSurfaces
 ==============
@@ -45,8 +140,22 @@ void R_AddAnimSurfaces( trRefEntity_t *ent )
         md4LOD_t        *lod;
         shader_t        *shader;
         int             i;
+	int		cull;
 
         header = (md4Header_t *) tr.currentModel->md4;
+
+	#if 0
+	//
+	// cull the entire model if merged bounding box of both frames
+	// is outside the view frustum.
+	//
+	cull = R_MDRCullModel (header, ent);
+
+	if ( cull == CULL_OUT ) {
+		return;
+	}	
+	#endif
+
         lod = (md4LOD_t *)( (byte *)header + header->ofsLODs );
 
         surface = (md4Surface_t *)( (byte *)lod + lod->ofsSurfaces );
@@ -98,7 +207,6 @@ void RB_SurfaceAnim( md4Surface_t *surface )
         frame = (md4Frame_t *)((byte *)header + header->ofsFrames + backEnd.currentEntity->e.frame * frameSize );
         oldFrame = (md4Frame_t *)((byte *)header + header->ofsFrames + backEnd.currentEntity->e.oldframe * frameSize );
 
-        //RB_CheckOverflow( surface->numVerts, surface->numTriangles * 3 );
         RB_CHECKOVERFLOW( surface->numVerts, surface->numTriangles * 3 ); // Cowcat
 
         triangles = (int *) ((byte *)surface + surface->ofsTriangles);

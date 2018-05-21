@@ -90,6 +90,7 @@ static snd_codec_t *S_FindCodecForFile(const char *filename)
 	{
 		if(!Q_stricmp(ext, codec->ext))
 			return codec;
+
 		codec = codec->next;
 	}
 
@@ -105,6 +106,7 @@ void S_CodecInit()
 {
 	codecs = NULL;
 	S_CodecRegister(&wav_codec);
+
 #ifdef USE_CODEC_VORBIS
 	S_CodecRegister(&ogg_codec);
 #endif
@@ -142,6 +144,7 @@ void *S_CodecLoad(const char *filename, snd_info_t *info)
 	char fn[MAX_QPATH];
 
 	codec = S_FindCodecForFile(filename);
+
 	if(!codec)
 	{
 		Com_Printf("Unknown extension for %s\n", filename);
@@ -165,6 +168,7 @@ snd_stream_t *S_CodecOpenStream(const char *filename)
 	char fn[MAX_QPATH];
 
 	codec = S_FindCodecForFile(filename);
+
 	if(!codec)
 	{
 		Com_Printf("Unknown extension for %s\n", filename);
@@ -197,12 +201,13 @@ S_CodecUtilOpen
 */
 snd_stream_t *S_CodecUtilOpen(const char *filename, snd_codec_t *codec)
 {
-	snd_stream_t *stream;
-	fileHandle_t hnd;
-	int length;
+	snd_stream_t	*stream;
+	fileHandle_t	hnd;
+	int		length;
 
 	// Try to open the file
 	length = FS_FOpenFileRead(filename, &hnd, qtrue);
+
 	if(!hnd)
 	{
 		Com_Printf("Can't read sound file %s\n", filename);
@@ -211,6 +216,7 @@ snd_stream_t *S_CodecUtilOpen(const char *filename, snd_codec_t *codec)
 
 	// Allocate a stream
 	stream = Z_Malloc(sizeof(snd_stream_t));
+
 	if(!stream)
 	{
 		FS_FCloseFile(hnd);

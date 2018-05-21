@@ -101,8 +101,9 @@ cvar_t	*cl_consoleKeys;
 clientActive_t		cl;
 clientConnection_t	clc;
 clientStatic_t		cls;
-vm_t				*cgvm;
+vm_t			*cgvm;
 
+char			cl_reconnectArgs[MAX_OSPATH];
 // Structure containing functions exported from refresh DLL
 refexport_t	re;
 
@@ -110,19 +111,20 @@ ping_t	cl_pinglist[MAX_PINGREQUESTS];
 
 typedef struct serverStatus_s
 {
-	char string[BIG_INFO_STRING];
-	netadr_t address;
-	int time, startTime;
-	qboolean pending;
-	qboolean print;
-	qboolean retrieved;
+	char		string[BIG_INFO_STRING];
+	netadr_t	address;
+	int		time, startTime;
+	qboolean	pending;
+	qboolean	print;
+	qboolean	retrieved;
+
 } serverStatus_t;
 
 serverStatus_t cl_serverStatusList[MAX_SERVERSTATUSREQUESTS];
 int serverStatusCount;
 
 #if defined __USEA3D && defined __A3D_GEOM
-	void hA3Dg_ExportRenderGeom (refexport_t *incoming_re);
+void hA3Dg_ExportRenderGeom (refexport_t *incoming_re);
 #endif
 
 extern void SV_BotFrame( int time );
@@ -131,6 +133,30 @@ void CL_ShowIP_f(void);
 void CL_ServerStatus_f(void);
 void CL_ServerStatusResponse( netadr_t from, msg_t *msg );
 
+#if defined(AMIGA) && defined(__VBCC__)
+
+#undef LittleLong
+
+#if defined (__PPC__)
+
+int __LittleLong(__reg("r4") int) =
+	"\trlwinm\t3,4,24,0,31\n"
+	"\trlwimi\t3,4,8,8,15\n"
+	"\trlwimi\t3,4,8,24,31";
+
+#else // 68k
+
+int __LittleLong(__reg("d0") int) =
+	"\trol.w\t#8,d0\n"
+	"\tswap\td0\n"
+	"\trol.w\t#8,d0";
+
+#endif
+
+#define LittleLong(x) __LittleLong(x)
+
+#endif
+
 /*
 ===============
 CL_CDDialog
@@ -138,13 +164,13 @@ CL_CDDialog
 Called by Com_Error when a cd is needed
 ===============
 */
-void CL_CDDialog( void ) {
+void CL_CDDialog( void )
+{
 	cls.cddialog = qtrue;	// start it next frame
 }
 
 #ifdef USE_MUMBLE
-static
-void CL_UpdateMumble(void)
+static void CL_UpdateMumble(void)
 {
 	vec3_t pos, forward, up;
 	float scale = cl_mumbleScale->value;
@@ -168,7 +194,8 @@ void CL_UpdateMumble(void)
 	up[1] = up[2];
 	up[2] = tmp;
 
-	if(cl_useMumble->integer > 1) {
+	if(cl_useMumble->integer > 1)
+	{
 		fprintf(stderr, "%f %f %f, %f %f %f, %f %f %f\n",
 			pos[0], pos[1], pos[2],
 			forward[0], forward[1], forward[2],
@@ -181,8 +208,7 @@ void CL_UpdateMumble(void)
 
 
 #ifdef USE_VOIP
-static
-void CL_UpdateVoipIgnore(const char *idstr, qboolean ignore)
+static void CL_UpdateVoipIgnore(const char *idstr, qboolean ignore)
 {
 	if ((*idstr >= '0') && (*idstr <= '9')) {
 		const int id = atoi(idstr);
@@ -196,8 +222,7 @@ void CL_UpdateVoipIgnore(const char *idstr, qboolean ignore)
 	}
 }
 
-static
-void CL_UpdateVoipGain(const char *idstr, float gain)
+static void CL_UpdateVoipGain(const char *idstr, float gain)
 {
 	if ((*idstr >= '0') && (*idstr <= '9')) {
 		const int id = atoi(idstr);
@@ -247,8 +272,7 @@ void CL_Voip_f( void )
 }
 
 
-static
-void CL_VoipNewGeneration(void)
+static void CL_VoipNewGeneration(void)
 {
 	// don't have a zero generation so new clients won't match, and don't
 	//  wrap to negative so MSG_ReadLong() doesn't "fail."
@@ -267,8 +291,7 @@ Record more audio from the hardware if required and encode it into Speex
  data for later transmission.
 ===============
 */
-static
-void CL_CaptureVoip(void)
+static void CL_CaptureVoip(void)
 {
 	const float audioMult = cl_voipCaptureMult->value;
 	const qboolean useVad = (cl_voipUseVAD->integer != 0);
@@ -441,35 +464,24 @@ The given command will be transmitted to the server, and is gauranteed to
 not have future usercmd_t executed before it is executed
 ======================
 */
-void CL_AddReliableCommand( const char *cmd ) {
-	int		index;
+void CL_AddReliableCommand( const char *cmd, qboolean isDisconnectedCmd )
+{
+	int unacknowledged = clc.reliableSequence - clc.reliableAcknowledge;
 
 	// if we would be losing an old command that hasn't been acknowledged,
 	// we must drop the connection
-	if ( clc.reliableSequence - clc.reliableAcknowledge > MAX_RELIABLE_COMMANDS ) {
-		Com_Error( ERR_DROP, "Client command overflow" );
-	}
-	clc.reliableSequence++;
-	index = clc.reliableSequence & ( MAX_RELIABLE_COMMANDS - 1 );
-	Q_strncpyz( clc.reliableCommands[ index ], cmd, sizeof( clc.reliableCommands[ index ] ) );
-}
+	if ( (isDisconnectedCmd && unacknowledged > MAX_RELIABLE_COMMANDS ) || 
+		(!isDisconnectedCmd && unacknowledged >= MAX_RELIABLE_COMMANDS ) )
+	{
+		if(com_errorEntered)
+			return;
 
-/*
-======================
-CL_ChangeReliableCommand
-======================
-*/
-void CL_ChangeReliableCommand( void ) {
-	int r, index, l;
-
-	r = clc.reliableSequence - (random() * 5);
-	index = clc.reliableSequence & ( MAX_RELIABLE_COMMANDS - 1 );
-	l = strlen(clc.reliableCommands[ index ]);
-	if ( l >= MAX_STRING_CHARS - 1 ) {
-		l = MAX_STRING_CHARS - 2;
+		else
+			Com_Error( ERR_DROP, "Client command overflow" );
 	}
-	clc.reliableCommands[ index ][ l ] = '\n';
-	clc.reliableCommands[ index ][ l+1 ] = '\0';
+
+	
+	Q_strncpyz( clc.reliableCommands[++clc.reliableSequence & ( MAX_RELIABLE_COMMANDS - 1 )], cmd, sizeof(*clc.reliableCommands) );
 }
 
 /*
@@ -488,8 +500,9 @@ Dumps the current net message, prefixed by the length
 ====================
 */
 
-void CL_WriteDemoMessage ( msg_t *msg, int headerBytes ) {
-	int		len, swlen;
+void CL_WriteDemoMessage ( msg_t *msg, int headerBytes )
+{
+	int	len, swlen;
 
 	// write the packet sequence
 	len = clc.serverMessageSequence;
@@ -511,10 +524,12 @@ CL_StopRecording_f
 stop recording a demo
 ====================
 */
-void CL_StopRecord_f( void ) {
-	int		len;
+void CL_StopRecord_f( void )
+{
+	int	len;
 
-	if ( !clc.demorecording ) {
+	if ( !clc.demorecording )
+	{
 		Com_Printf ("Not recording a demo.\n");
 		return;
 	}
@@ -535,8 +550,9 @@ void CL_StopRecord_f( void ) {
 CL_DemoFilename
 ================== 
 */  
-void CL_DemoFilename( int number, char *fileName ) {
-	int		a,b,c,d;
+void CL_DemoFilename( int number, char *fileName )
+{
+	int	a,b,c,d;
 
 	if(number < 0 || number > 9999)
 		number = 9999;
@@ -549,8 +565,7 @@ void CL_DemoFilename( int number, char *fileName ) {
 	number -= c*10;
 	d = number;
 
-	Com_sprintf( fileName, MAX_OSPATH, "demo%i%i%i%i"
-		, a, b, c, d );
+	Com_sprintf( fileName, MAX_OSPATH, "demo%i%i%i%i", a, b, c, d );
 }
 
 /*
@@ -562,48 +577,60 @@ record <demoname>
 Begins recording a demo from the current position
 ====================
 */
-static char		demoName[MAX_QPATH];	// compiler bug workaround
-void CL_Record_f( void ) {
+static char demoName[MAX_QPATH];	// compiler bug workaround
+
+void CL_Record_f( void )
+{
 	char		name[MAX_OSPATH];
 	byte		bufData[MAX_MSGLEN];
-	msg_t	buf;
-	int			i;
-	int			len;
+	msg_t		buf;
+	int		i;
+	int		len;
 	entityState_t	*ent;
 	entityState_t	nullstate;
 	char		*s;
 
-	if ( Cmd_Argc() > 2 ) {
+	if ( Cmd_Argc() > 2 )
+	{
 		Com_Printf ("record <demoname>\n");
 		return;
 	}
 
-	if ( clc.demorecording ) {
+	if ( clc.demorecording )
+	{
 		if (!clc.spDemoRecording) {
 			Com_Printf ("Already recording.\n");
 		}
+
 		return;
 	}
 
-	if ( cls.state != CA_ACTIVE ) {
+	if ( cls.state != CA_ACTIVE )
+	{
 		Com_Printf ("You must be in a level to record.\n");
 		return;
 	}
 
-  // sync 0 doesn't prevent recording, so not forcing it off .. everyone does g_sync 1 ; record ; g_sync 0 ..
-	if ( NET_IsLocalAddress( clc.serverAddress ) && !Cvar_VariableValue( "g_synchronousClients" ) ) {
+  	// sync 0 doesn't prevent recording, so not forcing it off .. everyone does g_sync 1 ; record ; g_sync 0 ..
+	if ( NET_IsLocalAddress( clc.serverAddress ) && !Cvar_VariableValue( "g_synchronousClients" ) )
+	{
 		Com_Printf (S_COLOR_YELLOW "WARNING: You should set 'g_synchronousClients 1' for smoother demo recording\n");
 	}
 
-	if ( Cmd_Argc() == 2 ) {
+	if ( Cmd_Argc() == 2 )
+	{
 		s = Cmd_Argv(1);
 		Q_strncpyz( demoName, s, sizeof( demoName ) );
 		Com_sprintf (name, sizeof(name), "demos/%s.dm_%d", demoName, PROTOCOL_VERSION );
-	} else {
-		int		number;
+	}
+
+	else
+	{
+		int	number;
 
 		// scan for a free demo name
-		for ( number = 0 ; number <= 9999 ; number++ ) {
+		for ( number = 0 ; number <= 9999 ; number++ )
+		{
 			CL_DemoFilename( number, demoName );
 			Com_sprintf (name, sizeof(name), "demos/%s.dm_%d", demoName, PROTOCOL_VERSION );
 
@@ -616,11 +643,15 @@ void CL_Record_f( void ) {
 
 	Com_Printf ("recording to %s.\n", name);
 	clc.demofile = FS_FOpenFileWrite( name );
-	if ( !clc.demofile ) {
+
+	if ( !clc.demofile )
+	{
 		Com_Printf ("ERROR: couldn't open.\n");
 		return;
 	}
+
 	clc.demorecording = qtrue;
+
 	if (Cvar_VariableValue("ui_recordSPDemo")) {
 	  clc.spDemoRecording = qtrue;
 	} else {
@@ -644,10 +675,12 @@ void CL_Record_f( void ) {
 	MSG_WriteLong (&buf, clc.serverCommandSequence );
 
 	// configstrings
-	for ( i = 0 ; i < MAX_CONFIGSTRINGS ; i++ ) {
+	for ( i = 0 ; i < MAX_CONFIGSTRINGS ; i++ )
+	{
 		if ( !cl.gameState.stringOffsets[i] ) {
 			continue;
 		}
+
 		s = cl.gameState.stringData + cl.gameState.stringOffsets[i];
 		MSG_WriteByte (&buf, svc_configstring);
 		MSG_WriteShort (&buf, i);
@@ -656,11 +689,15 @@ void CL_Record_f( void ) {
 
 	// baselines
 	Com_Memset (&nullstate, 0, sizeof(nullstate));
-	for ( i = 0; i < MAX_GENTITIES ; i++ ) {
+
+	for ( i = 0; i < MAX_GENTITIES ; i++ )
+	{
 		ent = &cl.entityBaselines[i];
+
 		if ( !ent->number ) {
 			continue;
 		}
+
 		MSG_WriteByte (&buf, svc_baseline);		
 		MSG_WriteDeltaEntity (&buf, &nullstate, ent, qtrue );
 	}
@@ -703,10 +740,10 @@ CL_DemoFrameDurationSDev
 */
 static float CL_DemoFrameDurationSDev( void )
 {
-	int i;
-	int numFrames;
-	float mean = 0.0f;
-	float variance = 0.0f;
+	int 	i;
+	int 	numFrames;
+	float 	mean = 0.0f;
+	float 	variance = 0.0f;
 
 	if( ( clc.timeDemoFrames - 1 ) > MAX_TIMEDEMO_DURATIONS )
 		numFrames = MAX_TIMEDEMO_DURATIONS;
@@ -715,6 +752,7 @@ static float CL_DemoFrameDurationSDev( void )
 
 	for( i = 0; i < numFrames; i++ )
 		mean += clc.timeDemoDurations[ i ];
+
 	mean /= numFrames;
 
 	for( i = 0; i < numFrames; i++ )
@@ -742,6 +780,7 @@ void CL_DemoCompleted( void )
 		int	time;
 		
 		time = Sys_Milliseconds() - clc.timeDemoStart;
+
 		if( time > 0 )
 		{
 			// Millisecond times are frame durations:
@@ -755,21 +794,24 @@ void CL_DemoCompleted( void )
 					time / (float)clc.timeDemoFrames,
 					clc.timeDemoMaxDuration,
 					CL_DemoFrameDurationSDev( ) );
+
 			Com_Printf( "%s", buffer );
 
 			// Write a log of all the frame durations
 			if( cl_timedemoLog && strlen( cl_timedemoLog->string ) > 0 )
 			{
-				int i;
-				int numFrames;
-				fileHandle_t f;
+				int		i;
+				int 		numFrames;
+				fileHandle_t 	f;
 
 				if( ( clc.timeDemoFrames - 1 ) > MAX_TIMEDEMO_DURATIONS )
 					numFrames = MAX_TIMEDEMO_DURATIONS;
+
 				else
 					numFrames = clc.timeDemoFrames - 1;
 
 				f = FS_FOpenFileWrite( cl_timedemoLog->string );
+
 				if( f )
 				{
 					FS_Printf( f, "# %s", buffer );
@@ -780,10 +822,10 @@ void CL_DemoCompleted( void )
 					FS_FCloseFile( f );
 					Com_Printf( "%s written\n", cl_timedemoLog->string );
 				}
+
 				else
 				{
-					Com_Printf( "Couldn't open %s for writing\n",
-							cl_timedemoLog->string );
+					Com_Printf( "Couldn't open %s for writing\n", cl_timedemoLog->string );
 				}
 			}
 		}
@@ -798,23 +840,28 @@ void CL_DemoCompleted( void )
 CL_ReadDemoMessage
 =================
 */
-void CL_ReadDemoMessage( void ) {
-	int			r;
-	msg_t		buf;
-	byte		bufData[ MAX_MSGLEN ];
-	int			s;
+void CL_ReadDemoMessage( void )
+{
+	int	r;
+	msg_t	buf;
+	byte	bufData[ MAX_MSGLEN ];
+	int	s;
 
-	if ( !clc.demofile ) {
+	if ( !clc.demofile )
+	{
 		CL_DemoCompleted ();
 		return;
 	}
 
 	// get the sequence number
 	r = FS_Read( &s, 4, clc.demofile);
-	if ( r != 4 ) {
+
+	if ( r != 4 )
+	{
 		CL_DemoCompleted ();
 		return;
 	}
+
 	clc.serverMessageSequence = LittleLong( s );
 
 	// init the message
@@ -822,20 +869,30 @@ void CL_ReadDemoMessage( void ) {
 
 	// get the length
 	r = FS_Read (&buf.cursize, 4, clc.demofile);
-	if ( r != 4 ) {
+
+	if ( r != 4 )
+	{
 		CL_DemoCompleted ();
 		return;
 	}
+
 	buf.cursize = LittleLong( buf.cursize );
-	if ( buf.cursize == -1 ) {
+
+	if ( buf.cursize == -1 )
+	{
 		CL_DemoCompleted ();
 		return;
 	}
-	if ( buf.cursize > buf.maxsize ) {
+
+	if ( buf.cursize > buf.maxsize )
+	{
 		Com_Error (ERR_DROP, "CL_ReadDemoMessage: demoMsglen > MAX_MSGLEN");
 	}
+
 	r = FS_Read( buf.data, buf.cursize, clc.demofile );
-	if ( r != buf.cursize ) {
+
+	if ( r != buf.cursize )
+	{
 		Com_Printf( "Demo file was truncated.\n");
 		CL_DemoCompleted ();
 		return;
@@ -855,17 +912,21 @@ static void CL_WalkDemoExt(char *arg, char *name, int *demofile)
 {
 	int i = 0;
 	*demofile = 0;
+
 	while(demo_protocols[i])
 	{
 		Com_sprintf (name, MAX_OSPATH, "demos/%s.dm_%d", arg, demo_protocols[i]);
 		FS_FOpenFileRead( name, demofile, qtrue );
+
 		if (*demofile)
 		{
 			Com_Printf("Demo file: %s\n", name);
 			break;
 		}
+
 		else
 			Com_Printf("Not found: %s\n", name);
+
 		i++;
 	}
 }
@@ -894,13 +955,15 @@ demo <demoname>
 
 ====================
 */
-void CL_PlayDemo_f( void ) {
-	char		name[MAX_OSPATH];
-	char		*arg, *ext_test;
-	int			protocol, i;
-	char		retry[MAX_OSPATH];
+void CL_PlayDemo_f( void )
+{
+	char	name[MAX_OSPATH];
+	char	*arg, *ext_test;
+	int	protocol, i;
+	char	retry[MAX_OSPATH];
 
-	if (Cmd_Argc() != 2) {
+	if (Cmd_Argc() != 2)
+	{
 		Com_Printf ("playdemo <demoname>\n");
 		return;
 	}
@@ -916,34 +979,46 @@ void CL_PlayDemo_f( void ) {
 	
 	// check for an extension .dm_?? (?? is protocol)
 	ext_test = arg + strlen(arg) - 6;
+
 	if ((strlen(arg) > 6) && (ext_test[0] == '.') && ((ext_test[1] == 'd') || (ext_test[1] == 'D')) && ((ext_test[2] == 'm') || (ext_test[2] == 'M')) && (ext_test[3] == '_'))
 	{
 		protocol = atoi(ext_test+4);
 		i=0;
+
 		while(demo_protocols[i])
 		{
 			if (demo_protocols[i] == protocol)
 				break;
+
 			i++;
 		}
+
 		if (demo_protocols[i])
 		{
 			Com_sprintf (name, sizeof(name), "demos/%s", arg);
 			FS_FOpenFileRead( name, &clc.demofile, qtrue );
-		} else {
+		}
+
+		else
+		{
 			Com_Printf("Protocol %d not supported for demos\n", protocol);
 			Q_strncpyz(retry, arg, sizeof(retry));
 			retry[strlen(retry)-6] = 0;
 			CL_WalkDemoExt( retry, name, &clc.demofile );
 		}
-	} else {
+	}
+
+	else
+	{
 		CL_WalkDemoExt( arg, name, &clc.demofile );
 	}
 	
-	if (!clc.demofile) {
+	if (!clc.demofile)
+	{
 		Com_Error( ERR_DROP, "couldn't open %s", name);
 		return;
 	}
+
 	Q_strncpyz( clc.demoName, Cmd_Argv(1), sizeof( clc.demoName ) );
 
 	Con_Close();
@@ -953,7 +1028,8 @@ void CL_PlayDemo_f( void ) {
 	Q_strncpyz( cls.servername, Cmd_Argv(1), sizeof( cls.servername ) );
 
 	// read demo messages until connected
-	while ( cls.state >= CA_CONNECTED && cls.state < CA_PRIMED ) {
+	while ( cls.state >= CA_CONNECTED && cls.state < CA_PRIMED )
+	{
 		CL_ReadDemoMessage();
 	}
 	// don't get the first snapshot this frame, to prevent the long
@@ -969,7 +1045,8 @@ CL_StartDemoLoop
 Closing the main menu will restart the demo loop
 ====================
 */
-void CL_StartDemoLoop( void ) {
+void CL_StartDemoLoop( void )
+{
 	// start the demo loop again
 	Cbuf_AddText ("d1\n");
 	Key_SetCatcher( 0 );
@@ -983,12 +1060,14 @@ Called when a demo or cinematic finishes
 If the "nextdemo" cvar is set, that command will be issued
 ==================
 */
-void CL_NextDemo( void ) {
+void CL_NextDemo( void )
+{
 	char	v[MAX_STRING_CHARS];
 
 	Q_strncpyz( v, Cvar_VariableString ("nextdemo"), sizeof(v) );
 	v[MAX_STRING_CHARS-1] = 0;
 	Com_DPrintf("CL_NextDemo: %s\n", v );
+
 	if (!v[0]) {
 		return;
 	}
@@ -1007,8 +1086,8 @@ void CL_NextDemo( void ) {
 CL_ShutdownAll
 =====================
 */
-void CL_ShutdownAll(void) {
-
+void CL_ShutdownAll(void)
+{
 #ifdef USE_CURL
 	CL_cURL_Shutdown();
 #endif
@@ -1020,7 +1099,8 @@ void CL_ShutdownAll(void) {
 	CL_ShutdownUI();
 
 	// shutdown the renderer
-	if ( re.Shutdown ) {
+	if ( re.Shutdown )
+	{
 		re.Shutdown( qfalse );		// don't destroy window or context
 	}
 
@@ -1039,19 +1119,22 @@ ways a client gets into a game
 Also called by Com_Error
 =================
 */
-void CL_FlushMemory( void ) {
-
+void CL_FlushMemory( void )
+{
 	// shutdown all the client stuff
 	CL_ShutdownAll();
 
 	// if not running a server clear the whole hunk
-	if ( !com_sv_running->integer ) {
+	if ( !com_sv_running->integer )
+	{
 		// clear the whole hunk
 		Hunk_Clear();
 		// clear collision map data
 		CM_ClearMap();
 	}
-	else {
+
+	else
+	{
 		// clear all the client data on the hunk
 		Hunk_ClearToMark();
 	}
@@ -1068,8 +1151,10 @@ screen to let the user know about it, then dump all client
 memory on the hunk from cgame, ui, and renderer
 =====================
 */
-void CL_MapLoading( void ) {
-	if ( com_dedicated->integer ) {
+void CL_MapLoading( void )
+{
+	if ( com_dedicated->integer )
+	{
 		cls.state = CA_DISCONNECTED;
 		Key_SetCatcher( KEYCATCH_CONSOLE );
 		return;
@@ -1083,14 +1168,18 @@ void CL_MapLoading( void ) {
 	Key_SetCatcher( 0 );
 
 	// if we are already connected to the local host, stay connected
-	if ( cls.state >= CA_CONNECTED && !Q_stricmp( cls.servername, "localhost" ) ) {
+	if ( cls.state >= CA_CONNECTED && !Q_stricmp( cls.servername, "localhost" ) )
+	{
 		cls.state = CA_CONNECTED;		// so the connect screen is drawn
 		Com_Memset( cls.updateInfoString, 0, sizeof( cls.updateInfoString ) );
 		Com_Memset( clc.serverMessage, 0, sizeof( clc.serverMessage ) );
 		Com_Memset( &cl.gameState, 0, sizeof( cl.gameState ) );
 		clc.lastPacketSentTime = -9999;
 		SCR_UpdateScreen();
-	} else {
+	}
+
+	else
+	{
 		// clear nextmap so the cinematic shutdown doesn't execute it
 		Cvar_Set( "nextmap", "" );
 		CL_Disconnect( qtrue );
@@ -1113,8 +1202,8 @@ CL_ClearState
 Called before parsing a gamestate
 =====================
 */
-void CL_ClearState (void) {
-
+void CL_ClearState (void)
+{
 //	S_StopAllSounds();
 
 	Com_Memset( &cl, 0, sizeof( cl ) );
@@ -1137,9 +1226,9 @@ static void CL_UpdateGUID( const char *prefix, int prefix_len )
 
 	if( len != QKEY_SIZE ) 
 		Cvar_Set( "cl_guid", "" );
+
 	else
-		Cvar_Set( "cl_guid", Com_MD5File( QKEY_FILE, QKEY_SIZE,
-			prefix, prefix_len ) );
+		Cvar_Set( "cl_guid", Com_MD5File( QKEY_FILE, QKEY_SIZE, prefix, prefix_len ) );
 }
 
 
@@ -1153,7 +1242,8 @@ Sends a disconnect message to the server
 This is also called on Com_Error and Com_Quit, so it shouldn't cause any errors
 =====================
 */
-void CL_Disconnect( qboolean showMainMenu ) {
+void CL_Disconnect( qboolean showMainMenu )
+{
 	if ( !com_cl_running || !com_cl_running->integer ) {
 		return;
 	}
@@ -1165,22 +1255,26 @@ void CL_Disconnect( qboolean showMainMenu ) {
 		CL_StopRecord_f ();
 	}
 
-	if (clc.download) {
+	if (clc.download)
+	{
 		FS_FCloseFile( clc.download );
 		clc.download = 0;
 	}
+
 	*clc.downloadTempName = *clc.downloadName = 0;
 	Cvar_Set( "cl_downloadName", "" );
 
 #ifdef USE_MUMBLE
-	if (cl_useMumble->integer && mumble_islinked()) {
+	if (cl_useMumble->integer && mumble_islinked())
+	{
 		Com_Printf("Mumble: Unlinking from Mumble application\n");
 		mumble_unlink();
 	}
 #endif
 
 #ifdef USE_VOIP
-	if (cl_voipSend->integer) {
+	if (cl_voipSend->integer)
+	{
 		int tmp = cl_voipUseVAD->integer;
 		cl_voipUseVAD->integer = 0;  // disable this for a moment.
 		clc.voipOutgoingDataSize = 0;  // dump any pending VoIP transmission.
@@ -1189,25 +1283,30 @@ void CL_Disconnect( qboolean showMainMenu ) {
 		cl_voipUseVAD->integer = tmp;
 	}
 
-	if (clc.speexInitialized) {
+	if (clc.speexInitialized)
+	{
 		int i;
 		speex_bits_destroy(&clc.speexEncoderBits);
 		speex_encoder_destroy(clc.speexEncoder);
 		speex_preprocess_state_destroy(clc.speexPreprocessor);
+
 		for (i = 0; i < MAX_CLIENTS; i++) {
 			speex_bits_destroy(&clc.speexDecoderBits[i]);
 			speex_decoder_destroy(clc.speexDecoder[i]);
 		}
 	}
+
 	Cmd_RemoveCommand ("voip");
 #endif
 
-	if ( clc.demofile ) {
+	if ( clc.demofile )
+	{
 		FS_FCloseFile( clc.demofile );
 		clc.demofile = 0;
 	}
 
-	if ( uivm && showMainMenu ) {
+	if ( uivm && showMainMenu )
+	{
 		VM_Call( uivm, UI_SET_ACTIVE_MENU, UIMENU_NONE );
 	}
 
@@ -1216,8 +1315,9 @@ void CL_Disconnect( qboolean showMainMenu ) {
 
 	// send a disconnect message to the server
 	// send it a few times in case one is dropped
-	if ( cls.state >= CA_CONNECTED ) {
-		CL_AddReliableCommand( "disconnect" );
+	if ( cls.state >= CA_CONNECTED )
+	{
+		CL_AddReliableCommand( "disconnect", qtrue );
 		CL_WritePacket();
 		CL_WritePacket();
 		CL_WritePacket();
@@ -1242,11 +1342,13 @@ void CL_Disconnect( qboolean showMainMenu ) {
 #endif
 
 	// Stop recording any video
-	if( CL_VideoRecording( ) ) {
+	if( CL_VideoRecording( ) )
+	{
 		// Finish rendering current frame
 		SCR_UpdateScreen( );
 		CL_CloseAVI( );
 	}
+
 	CL_UpdateGUID( NULL, 0 );
 }
 
@@ -1260,25 +1362,32 @@ things like godmode, noclip, etc, are commands directed to the server,
 so when they are typed in at the console, they will need to be forwarded.
 ===================
 */
-void CL_ForwardCommandToServer( const char *string ) {
+void CL_ForwardCommandToServer( const char *string ) 
+{
 	char	*cmd;
 
 	cmd = Cmd_Argv(0);
 
 	// ignore key up commands
-	if ( cmd[0] == '-' ) {
+	if ( cmd[0] == '-' )
+	{
 		return;
 	}
 
-	if ( clc.demoplaying || cls.state < CA_CONNECTED || cmd[0] == '+' ) {
+	if ( clc.demoplaying || cls.state < CA_CONNECTED || cmd[0] == '+' )
+	{
 		Com_Printf ("Unknown command \"%s" S_COLOR_WHITE "\"\n", cmd);
 		return;
 	}
 
-	if ( Cmd_Argc() > 1 ) {
-		CL_AddReliableCommand( string );
-	} else {
-		CL_AddReliableCommand( cmd );
+	if ( Cmd_Argc() > 1 )
+	{
+		CL_AddReliableCommand( string, qfalse );
+	}
+
+	else
+	{
+		CL_AddReliableCommand( cmd, qfalse );
 	}
 }
 
@@ -1288,17 +1397,22 @@ CL_RequestMotd
 
 ===================
 */
-void CL_RequestMotd( void ) {
-	char		info[MAX_INFO_STRING];
+void CL_RequestMotd( void )
+{
+	char	info[MAX_INFO_STRING];
 
 	if ( !cl_motd->integer ) {
 		return;
 	}
+
 	Com_Printf( "Resolving %s\n", UPDATE_SERVER_NAME );
-	if ( !NET_StringToAdr( UPDATE_SERVER_NAME, &cls.updateServer, NA_IP ) ) {
+
+	if ( !NET_StringToAdr( UPDATE_SERVER_NAME, &cls.updateServer, NA_IP ) )
+	{
 		Com_Printf( "Couldn't resolve address\n" );
 		return;
 	}
+
 	cls.updateServer.port = BigShort( PORT_UPDATE );
 	Com_Printf( "%s resolved to %i.%i.%i.%i:%i\n", UPDATE_SERVER_NAME,
 		cls.updateServer.ip[0], cls.updateServer.ip[1],
@@ -1306,12 +1420,14 @@ void CL_RequestMotd( void ) {
 		BigShort( cls.updateServer.port ) );
 	
 	info[0] = 0;
-  // NOTE TTimo xoring against Com_Milliseconds, otherwise we may not have a true randomization
-  // only srand I could catch before here is tr_noise.c l:26 srand(1001)
-  // https://zerowing.idsoftware.com/bugzilla/show_bug.cgi?id=382
-  // NOTE: the Com_Milliseconds xoring only affects the lower 16-bit word,
-  //   but I decided it was enough randomization
-	Com_sprintf( cls.updateChallenge, sizeof( cls.updateChallenge ), "%i", ((rand() << 16) ^ rand()) ^ Com_Milliseconds());
+
+	// NOTE TTimo xoring against Com_Milliseconds, otherwise we may not have a true randomization
+	// only srand I could catch before here is tr_noise.c l:26 srand(1001)
+	// https://zerowing.idsoftware.com/bugzilla/show_bug.cgi?id=382
+	// NOTE: the Com_Milliseconds xoring only affects the lower 16-bit word,
+  	//   but I decided it was enough randomization
+	//Com_sprintf( cls.updateChallenge, sizeof( cls.updateChallenge ), "%i", ((rand() << 16) ^ rand()) ^ Com_Milliseconds());
+	Com_sprintf( cls.updateChallenge, sizeof( cls.updateChallenge ), "%i", (int)((((unsigned int)rand() << 16) ^ (unsigned int)rand()) ^ Com_Milliseconds())); // new Cowcat
 
 	Info_SetValueForKey( info, "challenge", cls.updateChallenge );
 	Info_SetValueForKey( info, "renderer", cls.glconfig.renderer_string );
@@ -1359,14 +1475,19 @@ in anyway.
 ===================
 */
 #ifndef STANDALONE
-void CL_RequestAuthorization( void ) {
+
+void CL_RequestAuthorization( void )
+{
 	char	nums[64];
-	int		i, j, l;
+	int	i, j, l;
 	cvar_t	*fs;
 
-	if ( !cls.authorizeServer.port ) {
+	if ( !cls.authorizeServer.port )
+	{
 		Com_Printf( "Resolving %s\n", AUTHORIZE_SERVER_NAME );
-		if ( !NET_StringToAdr( AUTHORIZE_SERVER_NAME, &cls.authorizeServer, NA_IP ) ) {
+
+		if ( !NET_StringToAdr( AUTHORIZE_SERVER_NAME, &cls.authorizeServer, NA_IP ) )
+		{
 			Com_Printf( "Couldn't resolve address\n" );
 			return;
 		}
@@ -1377,6 +1498,7 @@ void CL_RequestAuthorization( void ) {
 			cls.authorizeServer.ip[2], cls.authorizeServer.ip[3],
 			BigShort( cls.authorizeServer.port ) );
 	}
+
 	if ( cls.authorizeServer.type == NA_BAD ) {
 		return;
 	}
@@ -1384,18 +1506,23 @@ void CL_RequestAuthorization( void ) {
 	// only grab the alphanumeric values from the cdkey, to avoid any dashes or spaces
 	j = 0;
 	l = strlen( cl_cdkey );
+
 	if ( l > 32 ) {
 		l = 32;
 	}
-	for ( i = 0 ; i < l ; i++ ) {
+
+	for ( i = 0 ; i < l ; i++ )
+	{
 		if ( ( cl_cdkey[i] >= '0' && cl_cdkey[i] <= '9' )
 				|| ( cl_cdkey[i] >= 'a' && cl_cdkey[i] <= 'z' )
 				|| ( cl_cdkey[i] >= 'A' && cl_cdkey[i] <= 'Z' )
-			 ) {
+			 )
+		{
 			nums[j] = cl_cdkey[i];
 			j++;
 		}
 	}
+
 	nums[j] = 0;
 
 	fs = Cvar_Get ("cl_anonymous", "0", CVAR_INIT|CVAR_SYSTEMINFO );
@@ -1416,15 +1543,17 @@ CONSOLE COMMANDS
 CL_ForwardToServer_f
 ==================
 */
-void CL_ForwardToServer_f( void ) {
-	if ( cls.state != CA_ACTIVE || clc.demoplaying ) {
+void CL_ForwardToServer_f( void )
+{
+	if ( cls.state != CA_ACTIVE || clc.demoplaying )
+	{
 		Com_Printf ("Not connected to a server.\n");
 		return;
 	}
 	
 	// don't forward the first argument
 	if ( Cmd_Argc() > 1 ) {
-		CL_AddReliableCommand( Cmd_Args() );
+		CL_AddReliableCommand( Cmd_Args(), qfalse );
 	}
 }
 
@@ -1435,28 +1564,38 @@ CL_Setenv_f
 Mostly for controlling voodoo environment variables
 ==================
 */
-void CL_Setenv_f( void ) {
+void CL_Setenv_f( void )
+{
 	int argc = Cmd_Argc();
 
-	if ( argc > 2 ) {
+	if ( argc > 2 )
+	{
 		char buffer[1024];
 		int i;
 
 		strcpy( buffer, Cmd_Argv(1) );
 		strcat( buffer, "=" );
 
-		for ( i = 2; i < argc; i++ ) {
+		for ( i = 2; i < argc; i++ )
+		{
 			strcat( buffer, Cmd_Argv( i ) );
 			strcat( buffer, " " );
 		}
 
 		//putenv( buffer ); // Cowcat
-	} else if ( argc == 2 ) {
+	}
+
+	else if ( argc == 2 )
+	{
 		char *env = getenv( Cmd_Argv(1) );
 
-		if ( env ) {
+		if ( env )
+		{
 			Com_Printf( "%s=%s\n", Cmd_Argv(1), env );
-		} else {
+		}
+
+		else
+		{
 			Com_Printf( "%s undefined\n", Cmd_Argv(1));
 		}
 	}
@@ -1468,10 +1607,13 @@ void CL_Setenv_f( void ) {
 CL_Disconnect_f
 ==================
 */
-void CL_Disconnect_f( void ) {
+void CL_Disconnect_f( void )
+{
 	SCR_StopCinematic();
 	Cvar_Set("ui_singlePlayerActive", "0");
-	if ( cls.state != CA_DISCONNECTED && cls.state != CA_CINEMATIC ) {
+
+	if ( cls.state != CA_DISCONNECTED && cls.state != CA_CINEMATIC )
+	{
 		Com_Error (ERR_DISCONNECT, "Disconnected from server");
 	}
 }
@@ -1483,11 +1625,11 @@ CL_Reconnect_f
 
 ================
 */
-void CL_Reconnect_f( void ) {
-	if ( !strlen( cls.servername ) || !strcmp( cls.servername, "localhost" ) ) {
-		Com_Printf( "Can't reconnect to localhost.\n" );
+void CL_Reconnect_f( void )
+{
+	if ( !strlen( cl_reconnectArgs ) )
 		return;
-	}
+
 	Cvar_Set("ui_singlePlayerActive", "0");
 	Cbuf_AddText( va("connect %s\n", cls.servername ) );
 }
@@ -1498,23 +1640,27 @@ CL_Connect_f
 
 ================
 */
-void CL_Connect_f( void ) {
-	char	*server;
+void CL_Connect_f( void )
+{
+	char		server[MAX_OSPATH];
 	const char	*serverString;
-	int argc = Cmd_Argc();
-	netadrtype_t family = NA_UNSPEC;
+	int 		argc = Cmd_Argc();
+	netadrtype_t 	family = NA_UNSPEC;
 
-	if ( argc != 2 && argc != 3 ) {
+	if ( argc != 2 && argc != 3 )
+	{
 		Com_Printf( "usage: connect [-4|-6] server\n");
 		return;	
 	}
 	
 	if(argc == 2)
-		server = Cmd_Argv(1);
+		Q_strncpyz( server, Cmd_Argv(1), sizeof(server) );
+
 	else
 	{
 		if(!strcmp(Cmd_Argv(1), "-4"))
 			family = NA_IP;
+
 #ifndef AMIGA //__amigaos4__
 		else if(!strcmp(Cmd_Argv(1), "-6"))
 			family = NA_IP6;
@@ -1522,8 +1668,10 @@ void CL_Connect_f( void ) {
 		else
 			Com_Printf( "warning: only -4 or -6 as address type understood.\n");
 		
-		server = Cmd_Argv(2);
+		Q_strncpyz( server, Cmd_Argv(2), sizeof(server) );
 	}
+
+	Q_strncpyz( cl_reconnectArgs, Cmd_Args(), sizeof(cl_reconnectArgs) );
 
 	Cvar_Set("ui_singlePlayerActive", "0");
 
@@ -1533,7 +1681,8 @@ void CL_Connect_f( void ) {
 	// clear any previous "server full" type messages
 	clc.serverMessage[0] = 0;
 
-	if ( com_sv_running->integer && !strcmp( server, "localhost" ) ) {
+	if ( com_sv_running->integer && !strcmp( server, "localhost" ) )
+	{
 		// if running a local server, kill it
 		SV_Shutdown( "Server quit" );
 	}
@@ -1547,12 +1696,15 @@ void CL_Connect_f( void ) {
 
 	Q_strncpyz( cls.servername, server, sizeof(cls.servername) );
 
-	if (!NET_StringToAdr(cls.servername, &clc.serverAddress, family) ) {
+	if (!NET_StringToAdr(cls.servername, &clc.serverAddress, family) )
+	{
 		Com_Printf ("Bad server address\n");
 		cls.state = CA_DISCONNECTED;
 		return;
 	}
-	if (clc.serverAddress.port == 0) {
+
+	if (clc.serverAddress.port == 0)
+	{
 		clc.serverAddress.port = BigShort( PORT_SERVER );
 	}
 
@@ -1562,15 +1714,22 @@ void CL_Connect_f( void ) {
 
 	if( cl_guidServerUniq->integer )
 		CL_UpdateGUID( serverString, strlen( serverString ) );
+
 	else
 		CL_UpdateGUID( NULL, 0 );
 
 	// if we aren't playing on a lan, we need to authenticate
 	// with the cd key
-	if ( NET_IsLocalAddress( clc.serverAddress ) ) {
+	if ( NET_IsLocalAddress( clc.serverAddress ) )
+	{
 		cls.state = CA_CHALLENGING;
-	} else {
+	}
+
+	else
+	{
 		cls.state = CA_CONNECTING;
+		
+		clc.challenge = (((unsigned int)rand()<< 16) ^ (unsigned int)rand()) ^ Com_Milliseconds(); // needed ? - Cowcat
 	}
 
 	Key_SetCatcher( 0 );
@@ -1608,13 +1767,14 @@ CL_Rcon_f
   an unconnected command.
 =====================
 */
-void CL_Rcon_f( void ) {
+void CL_Rcon_f( void )
+{
 	char	message[MAX_RCON_MESSAGE];
 	netadr_t	to;
 
-	if ( !rcon_client_password->string ) {
-		Com_Printf ("You must set 'rconpassword' before\n"
-					"issuing an rcon command.\n");
+	if ( !rcon_client_password->string )
+	{
+		Com_Printf ("You must set 'rconpassword' before\n" "issuing an rcon command.\n");
 		return;
 	}
 
@@ -1625,24 +1785,30 @@ void CL_Rcon_f( void ) {
 	message[4] = 0;
 
 	Q_strcat (message, MAX_RCON_MESSAGE, "rcon ");
-
 	Q_strcat (message, MAX_RCON_MESSAGE, rcon_client_password->string);
 	Q_strcat (message, MAX_RCON_MESSAGE, " ");
 
 	// https://zerowing.idsoftware.com/bugzilla/show_bug.cgi?id=543
 	Q_strcat (message, MAX_RCON_MESSAGE, Cmd_Cmd()+5);
 
-	if ( cls.state >= CA_CONNECTED ) {
+	if ( cls.state >= CA_CONNECTED )
+	{
 		to = clc.netchan.remoteAddress;
-	} else {
-		if (!strlen(rconAddress->string)) {
+	}
+
+	else
+	{
+		if (!strlen(rconAddress->string))
+		{
 			Com_Printf ("You must either be connected,\n"
 						"or set the 'rconAddress' cvar\n"
 						"to issue rcon commands\n");
 
 			return;
 		}
+
 		NET_StringToAdr (rconAddress->string, &to, NA_UNSPEC);
+
 		if (to.port == 0) {
 			to.port = BigShort (PORT_SERVER);
 		}
@@ -1656,13 +1822,14 @@ void CL_Rcon_f( void ) {
 CL_SendPureChecksums
 =================
 */
-void CL_SendPureChecksums( void ) {
+void CL_SendPureChecksums( void )
+{
 	char cMsg[MAX_INFO_VALUE];
 
 	// if we are pure we need to send back a command with our referenced pk3 checksums
 	Com_sprintf(cMsg, sizeof(cMsg), "cp %d %s", cl.serverId, FS_ReferencedPakPureChecksums());
 
-	CL_AddReliableCommand( cMsg );
+	CL_AddReliableCommand( cMsg, qfalse );
 }
 
 /*
@@ -1670,8 +1837,9 @@ void CL_SendPureChecksums( void ) {
 CL_ResetPureClientAtServer
 =================
 */
-void CL_ResetPureClientAtServer( void ) {
-	CL_AddReliableCommand( va("vdr") );
+void CL_ResetPureClientAtServer( void )
+{
+	CL_AddReliableCommand( "vdr", qfalse );
 }
 
 /*
@@ -1684,18 +1852,31 @@ we also have to reload the UI and CGame because the renderer
 doesn't know what graphics to reload
 =================
 */
-void CL_Vid_Restart_f( void ) {
-
+void CL_Vid_Restart_f( void )
+{
 	// Settings may have changed so stop recording now
-	if( CL_VideoRecording( ) ) {
+	if( CL_VideoRecording( ) )
 		CL_CloseAVI( );
-	}
 
 	if(clc.demorecording)
 		CL_StopRecord_f();
 
 	// don't let them loop during the restart
 	S_StopAllSounds();
+
+	// if not running a server clear the whole hunk // - that was down - Cowcat
+	if ( !com_sv_running->integer )
+	{
+		// clear the whole hunk
+		Hunk_Clear();
+	}
+	
+	else
+	{
+		// clear all the client data on the hunk
+		Hunk_ClearToMark();
+	}
+
 	// shutdown the UI
 	CL_ShutdownUI();
 	// shutdown the CGame
@@ -1717,15 +1898,7 @@ void CL_Vid_Restart_f( void ) {
 	// unpause so the cgame definately gets a snapshot and renders a frame
 	Cvar_Set( "cl_paused", "0" );
 
-	// if not running a server clear the whole hunk
-	if ( !com_sv_running->integer ) {
-		// clear the whole hunk
-		Hunk_Clear();
-	}
-	else {
-		// clear all the client data on the hunk
-		Hunk_ClearToMark();
-	}
+	//
 
 	// initialize the renderer interface
 	CL_InitRef();
@@ -1734,7 +1907,8 @@ void CL_Vid_Restart_f( void ) {
 	CL_StartHunkUsers( qfalse );
 
 	// start the cgame if connected
-	if ( cls.state > CA_CONNECTED && cls.state != CA_CINEMATIC ) {
+	if ( cls.state > CA_CONNECTED && cls.state != CA_CINEMATIC )
+	{
 		cls.cgameStarted = qtrue;
 		CL_InitCGame();
 		// send pure checksums
@@ -1751,7 +1925,8 @@ The cgame and game must also be forced to restart because
 handles will be invalid
 =================
 */
-void CL_Snd_Restart_f( void ) {
+void CL_Snd_Restart_f( void )
+{
 	S_Shutdown();
 	S_Init();
 
@@ -1764,7 +1939,8 @@ void CL_Snd_Restart_f( void ) {
 CL_PK3List_f
 ==================
 */
-void CL_OpenedPK3List_f( void ) {
+void CL_OpenedPK3List_f( void )
+{
 	Com_Printf("Opened PK3 Names: %s\n", FS_LoadedPakNames());
 }
 
@@ -1773,7 +1949,8 @@ void CL_OpenedPK3List_f( void ) {
 CL_PureList_f
 ==================
 */
-void CL_ReferencedPK3List_f( void ) {
+void CL_ReferencedPK3List_f( void )
+{
 	Com_Printf("Referenced PK3 Names: %s\n", FS_ReferencedPakNames());
 }
 
@@ -1782,20 +1959,25 @@ void CL_ReferencedPK3List_f( void ) {
 CL_Configstrings_f
 ==================
 */
-void CL_Configstrings_f( void ) {
-	int		i;
-	int		ofs;
+void CL_Configstrings_f( void )
+{
+	int	i;
+	int	ofs;
 
-	if ( cls.state != CA_ACTIVE ) {
+	if ( cls.state != CA_ACTIVE )
+	{
 		Com_Printf( "Not connected to a server.\n");
 		return;
 	}
 
-	for ( i = 0 ; i < MAX_CONFIGSTRINGS ; i++ ) {
+	for ( i = 0 ; i < MAX_CONFIGSTRINGS ; i++ )
+	{
 		ofs = cl.gameState.stringOffsets[ i ];
+
 		if ( !ofs ) {
 			continue;
 		}
+
 		Com_Printf( "%4i: %s\n", i, cl.gameState.stringData + ofs );
 	}
 }
@@ -1805,7 +1987,8 @@ void CL_Configstrings_f( void ) {
 CL_Clientinfo_f
 ==============
 */
-void CL_Clientinfo_f( void ) {
+void CL_Clientinfo_f( void )
+{
 	Com_Printf( "--------- Client Information ---------\n" );
 	Com_Printf( "state: %i\n", cls.state );
 	Com_Printf( "Server: %s\n", cls.servername );
@@ -1824,18 +2007,24 @@ CL_DownloadsComplete
 Called when all downloading has been completed
 =================
 */
-void CL_DownloadsComplete( void ) {
+void CL_DownloadsComplete( void )
+{
 
 #ifdef USE_CURL
 	// if we downloaded with cURL
-	if(clc.cURLUsed) { 
+	if(clc.cURLUsed)
+	{ 
 		clc.cURLUsed = qfalse;
 		CL_cURL_Shutdown();
-		if( clc.cURLDisconnected ) {
-			if(clc.downloadRestart) {
+
+		if( clc.cURLDisconnected )
+		{
+			if(clc.downloadRestart)
+			{
 				FS_Restart(clc.checksumFeed);
 				clc.downloadRestart = qfalse;
 			}
+
 			clc.cURLDisconnected = qfalse;
 			CL_Reconnect_f();
 			return;
@@ -1844,13 +2033,14 @@ void CL_DownloadsComplete( void ) {
 #endif
 
 	// if we downloaded files we need to restart the file system
-	if (clc.downloadRestart) {
+	if (clc.downloadRestart)
+	{
 		clc.downloadRestart = qfalse;
 
 		FS_Restart(clc.checksumFeed); // We possibly downloaded a pak, restart the file system to load it
 
 		// inform the server so we get new gamestate info
-		CL_AddReliableCommand( "donedl" );
+		CL_AddReliableCommand( "donedl" , qfalse);
 
 		// by sending the donedl command we request a new gamestate
 		// so we don't want to load stuff yet
@@ -1865,7 +2055,8 @@ void CL_DownloadsComplete( void ) {
 
 	// if the gamestate was changed by calling Com_EventLoop
 	// then we loaded everything already and we don't want to do it again.
-	if ( cls.state != CA_LOADING ) {
+	if ( cls.state != CA_LOADING )
+	{
 		return;
 	}
 
@@ -1898,8 +2089,8 @@ Requests a file to download from the server.  Stores it in the current
 game directory.
 =================
 */
-void CL_BeginDownload( const char *localName, const char *remoteName ) {
-
+void CL_BeginDownload( const char *localName, const char *remoteName )
+{
 	Com_DPrintf("***** CL_BeginDownload *****\n"
 				"Localname: %s\n"
 				"Remotename: %s\n"
@@ -1917,7 +2108,7 @@ void CL_BeginDownload( const char *localName, const char *remoteName ) {
 	clc.downloadBlock = 0; // Starting new file
 	clc.downloadCount = 0;
 
-	CL_AddReliableCommand( va("download %s", remoteName) );
+	CL_AddReliableCommand( va("download %s", remoteName), qfalse );
 }
 
 /*
@@ -1927,13 +2118,15 @@ CL_NextDownload
 A download completed or failed
 =================
 */
-void CL_NextDownload(void) {
-	char *s;
-	char *remoteName, *localName;
+void CL_NextDownload(void)
+{
+	char	*s;
+	char	*remoteName, *localName;
 	qboolean useCURL = qfalse;
 
 	// We are looking to start a download here
-	if (*clc.downloadList) {
+	if (*clc.downloadList)
+	{
 		s = clc.downloadList;
 
 		// format is:
@@ -1941,21 +2134,27 @@ void CL_NextDownload(void) {
 
 		if (*s == '@')
 			s++;
+
 		remoteName = s;
 		
-		if ( (s = strchr(s, '@')) == NULL ) {
+		if ( (s = strchr(s, '@')) == NULL )
+		{
 			CL_DownloadsComplete();
 			return;
 		}
 
 		*s++ = 0;
 		localName = s;
+
 		if ( (s = strchr(s, '@')) != NULL )
 			*s++ = 0;
+
 		else
 			s = localName + strlen(localName); // point at the nul byte
+
 #ifdef USE_CURL
-		if(!(cl_allowDownload->integer & DLF_NO_REDIRECT)) {
+		if(!(cl_allowDownload->integer & DLF_NO_REDIRECT))
+		{
 			if(clc.sv_allowDownload & DLF_NO_REDIRECT) {
 				Com_Printf("WARNING: server does not "
 					"allow download redirection "
@@ -1984,18 +2183,24 @@ void CL_NextDownload(void) {
 				cl_allowDownload->integer);
 		}
 #endif /* USE_CURL */
-		if(!useCURL) {
-			if((cl_allowDownload->integer & DLF_NO_UDP)) {
+
+		if(!useCURL)
+		{
+			if((cl_allowDownload->integer & DLF_NO_UDP))
+			{
 				Com_Error(ERR_DROP, "UDP Downloads are "
 					"disabled on your client. "
 					"(cl_allowDownload is %d)",
 					cl_allowDownload->integer);
 				return;	
 			}
-			else {
+
+			else
+			{
 				CL_BeginDownload( localName, remoteName );
 			}
 		}
+
 		clc.downloadRestart = qtrue;
 
 		// move over the rest
@@ -2015,27 +2220,30 @@ After receiving a valid game state, we valid the cgame and local zip files here
 and determine if we need to download them
 =================
 */
-void CL_InitDownloads(void) {
-  char missingfiles[1024];
+void CL_InitDownloads(void)
+{
+	char missingfiles[1024];
 
-  if ( !(cl_allowDownload->integer & DLF_ENABLE) )
-  {
-	// autodownload is disabled on the client
-	// but it's possible that some referenced files on the server are missing
-	if (FS_ComparePaks( missingfiles, sizeof( missingfiles ), qfalse ) )
-	{      
-	  // NOTE TTimo I would rather have that printed as a modal message box
-	  //   but at this point while joining the game we don't know wether we will successfully join or not
-	  Com_Printf( "\nWARNING: You are missing some files referenced by the server:\n%s"
+	if ( !(cl_allowDownload->integer & DLF_ENABLE) )
+	{
+		// autodownload is disabled on the client
+		// but it's possible that some referenced files on the server are missing
+		if (FS_ComparePaks( missingfiles, sizeof( missingfiles ), qfalse ) )
+		{      
+	  		// NOTE TTimo I would rather have that printed as a modal message box
+	  		//   but at this point while joining the game we don't know wether we will successfully join or not
+	  		Com_Printf( "\nWARNING: You are missing some files referenced by the server:\n%s"
 				  "You might not be able to join the game\n"
 				  "Go to the setting menu to turn on autodownload, or get the file elsewhere\n\n", missingfiles );
-	}
-  }
-  else if ( FS_ComparePaks( clc.downloadList, sizeof( clc.downloadList ) , qtrue ) ) {
+		}
+  	}
 
-	Com_Printf("Need paks: %s\n", clc.downloadList );
+	else if ( FS_ComparePaks( clc.downloadList, sizeof( clc.downloadList ) , qtrue ) )
+	{
+		Com_Printf("Need paks: %s\n", clc.downloadList );
 
-		if ( *clc.downloadList ) {
+		if ( *clc.downloadList )
+		{
 			// if autodownloading is not enabled on the server
 			cls.state = CA_CONNECTED;
 			CL_NextDownload();
@@ -2054,8 +2262,9 @@ CL_CheckForResend
 Resend a connect message if the last one has timed out
 =================
 */
-void CL_CheckForResend( void ) {
-	int		port, i;
+void CL_CheckForResend( void )
+{
+	int	port, i;
 	char	info[MAX_INFO_STRING];
 	char	data[MAX_INFO_STRING];
 
@@ -2076,14 +2285,17 @@ void CL_CheckForResend( void ) {
 	clc.connectTime = cls.realtime;	// for retransmit requests
 	clc.connectPacketCount++;
 
+	switch ( cls.state )
+	{
 
-	switch ( cls.state ) {
 	case CA_CONNECTING:
 		// requesting a challenge .. IPv6 users always get in as authorize server supports no ipv6.
+
 #ifndef STANDALONE
 		if (!Cvar_VariableIntegerValue("com_standalone") && clc.serverAddress.type == NA_IP && !Sys_IsLANAddress( clc.serverAddress ) )
 			CL_RequestAuthorization();
 #endif
+
 		NET_OutOfBandPrint(NS_CLIENT, clc.serverAddress, "getchallenge");
 		break;
 		
@@ -2097,17 +2309,20 @@ void CL_CheckForResend( void ) {
 		Info_SetValueForKey( info, "challenge", va("%i", clc.challenge ) );
 		
 		strcpy(data, "connect ");
-	// TTimo adding " " around the userinfo string to avoid truncated userinfo on the server
-	//   (Com_TokenizeString tokenizes around spaces)
-	data[8] = '"';
 
-		for(i=0;i<strlen(info);i++) {
+		// TTimo adding " " around the userinfo string to avoid truncated userinfo on the server
+		//   (Com_TokenizeString tokenizes around spaces)
+		data[8] = '"';
+
+		for(i=0;i<strlen(info);i++)
+		{
 			data[9+i] = info[i];	// + (clc.challenge)&0x3;
 		}
-	data[9+i] = '"';
+
+		data[9+i] = '"';
 		data[10+i] = 0;
 
-	// NOTE TTimo don't forget to set the right data length!
+		// NOTE TTimo don't forget to set the right data length!
 		NET_OutOfBandData( NS_CLIENT, clc.serverAddress, (byte *) &data[0], i+10 );
 		// the most current userinfo has been sent, so watch for any
 		// newer changes to userinfo variables
@@ -2130,8 +2345,8 @@ to the client so it doesn't have to wait for the full timeout period.
 ===================
 */
 
-#if 1 // - Cowcat
-void CL_DisconnectPacket( netadr_t from ) {
+void CL_DisconnectPacket( netadr_t from )
+{
 	if ( cls.state < CA_AUTHORIZING ) {
 		return;
 	}
@@ -2152,7 +2367,6 @@ void CL_DisconnectPacket( netadr_t from ) {
 	Cvar_Set("com_errorMessage", "Server disconnected for unknown reason\n" );
 	CL_Disconnect( qtrue );
 }
-#endif 
 
 /*
 ===================
@@ -2160,7 +2374,8 @@ CL_MotdPacket
 
 ===================
 */
-void CL_MotdPacket( netadr_t from ) {
+void CL_MotdPacket( netadr_t from )
+{
 	char	*challenge;
 	char	*info;
 
@@ -2173,6 +2388,7 @@ void CL_MotdPacket( netadr_t from ) {
 
 	// check challenge
 	challenge = Info_ValueForKey( info, "challenge" );
+
 	if ( strcmp( challenge, cls.updateChallenge ) ) {
 		return;
 	}
@@ -2188,7 +2404,8 @@ void CL_MotdPacket( netadr_t from ) {
 CL_InitServerInfo
 ===================
 */
-void CL_InitServerInfo( serverInfo_t *server, netadr_t *address ) {
+void CL_InitServerInfo( serverInfo_t *server, netadr_t *address )
+{
 	server->adr = *address;
 	server->clients = 0;
 	server->hostName[0] = '\0';
@@ -2200,6 +2417,7 @@ void CL_InitServerInfo( serverInfo_t *server, netadr_t *address ) {
 	server->game[0] = '\0';
 	server->gameType = 0;
 	server->netType = 0;
+	server->punkbuster = 0;
 }
 
 #define MAX_SERVERSPERPACKET	256
@@ -2209,16 +2427,18 @@ void CL_InitServerInfo( serverInfo_t *server, netadr_t *address ) {
 CL_ServersResponsePacket
 ===================
 */
-void CL_ServersResponsePacket( const netadr_t* from, msg_t *msg, qboolean extended ) {
-	int				i, count, total;
-	netadr_t addresses[MAX_SERVERSPERPACKET];
-	int				numservers;
-	byte*			buffptr;
-	byte*			buffend;
+void CL_ServersResponsePacket( const netadr_t* from, msg_t *msg, qboolean extended )
+{
+	int		i, count, total;
+	netadr_t 	addresses[MAX_SERVERSPERPACKET];
+	int		numservers;
+	byte*		buffptr;
+	byte*		buffend;
 	
 	Com_Printf("CL_ServersResponsePacket\n");
 
-	if (cls.numglobalservers == -1) {
+	if (cls.numglobalservers == -1)
+	{
 		// state to detect lack of servers or lack of response
 		cls.numglobalservers = 0;
 		cls.numGlobalServerAddresses = 0;
@@ -2236,6 +2456,7 @@ void CL_ServersResponsePacket( const netadr_t* from, msg_t *msg, qboolean extend
 			break;
 		
 		buffptr++;
+
 	} while (buffptr < buffend);
 
 	while (buffptr + 1 < buffend)
@@ -2283,13 +2504,15 @@ void CL_ServersResponsePacket( const netadr_t* from, msg_t *msg, qboolean extend
 			break;
 	
 		numservers++;
+
 		if (numservers >= MAX_SERVERSPERPACKET)
 			break;
 	}
 
 	count = cls.numglobalservers;
 
-	for (i = 0; i < numservers && count < MAX_GLOBAL_SERVERS; i++) {
+	for (i = 0; i < numservers && count < MAX_GLOBAL_SERVERS; i++)
+	{
 		// build net address
 		serverInfo_t *server = &cls.globalServers[count];
 
@@ -2322,7 +2545,8 @@ CL_ConnectionlessPacket
 Responses to broadcasts, etc
 =================
 */
-void CL_ConnectionlessPacket( netadr_t from, msg_t *msg ) {
+void CL_ConnectionlessPacket( netadr_t from, msg_t *msg )
+{
 	char	*s;
 	char	*c;
 
@@ -2335,13 +2559,19 @@ void CL_ConnectionlessPacket( netadr_t from, msg_t *msg ) {
 
 	c = Cmd_Argv(0);
 
-	Com_DPrintf ("CL packet %s: %s\n", NET_AdrToStringwPort(from), c);
+	if( com_developer->integer) // new Cowcat
+		Com_Printf ("CL packet %s: %s\n", NET_AdrToStringwPort(from), c);
 
 	// challenge from the server we are connecting to
-	if ( !Q_stricmp(c, "challengeResponse") ) {
-		if ( cls.state != CA_CONNECTING ) {
+	if ( !Q_stricmp(c, "challengeResponse") )
+	{
+		if ( cls.state != CA_CONNECTING )
+		{
 			Com_DPrintf( "Unwanted challenge response received.  Ignored.\n" );
-		} else {
+		}
+
+		else
+		{
 			// start sending challenge repsonse instead of challenge request packets
 			clc.challenge = atoi(Cmd_Argv(1));
 			cls.state = CA_CHALLENGING;
@@ -2353,25 +2583,33 @@ void CL_ConnectionlessPacket( netadr_t from, msg_t *msg ) {
 			clc.serverAddress = from;
 			Com_DPrintf ("challengeResponse: %d\n", clc.challenge);
 		}
+
 		return;
 	}
 
 	// server connection
-	if ( !Q_stricmp(c, "connectResponse") ) {
-		if ( cls.state >= CA_CONNECTED ) {
+	if ( !Q_stricmp(c, "connectResponse") )
+	{
+		if ( cls.state >= CA_CONNECTED )
+		{
 			Com_Printf ("Dup connect received.  Ignored.\n");
 			return;
 		}
-		if ( cls.state != CA_CHALLENGING ) {
+
+		if ( cls.state != CA_CHALLENGING )
+		{
 			Com_Printf ("connectResponse packet while not connecting.  Ignored.\n");
 			return;
 		}
-		if ( !NET_CompareBaseAdr( from, clc.serverAddress ) ) {
+
+		if ( !NET_CompareBaseAdr( from, clc.serverAddress ) )
+		{
 			Com_Printf( "connectResponse from a different address.  Ignored.\n" );
 			Com_Printf( "%s should have been %s\n", NET_AdrToStringwPort( from ), 
 				NET_AdrToStringwPort( clc.serverAddress ) );
 			return;
 		}
+
 		Netchan_Setup (NS_CLIENT, &clc.netchan, from, Cvar_VariableValue( "net_qport" ) );
 		cls.state = CA_CONNECTED;
 		clc.lastPacketSentTime = -9999;		// send first packet immediately
@@ -2379,44 +2617,51 @@ void CL_ConnectionlessPacket( netadr_t from, msg_t *msg ) {
 	}
 
 	// server responding to an info broadcast
-	if ( !Q_stricmp(c, "infoResponse") ) {
+	if ( !Q_stricmp(c, "infoResponse") )
+	{
 		CL_ServerInfoPacket( from, msg );
 		return;
 	}
 
 	// server responding to a get playerlist
-	if ( !Q_stricmp(c, "statusResponse") ) {
+	if ( !Q_stricmp(c, "statusResponse") )
+	{
 		CL_ServerStatusResponse( from, msg );
 		return;
 	}
 
 	// a disconnect message from the server, which will happen if the server
 	// dropped the connection but it is still getting packets from us
-	if (!Q_stricmp(c, "disconnect")) {
+	if (!Q_stricmp(c, "disconnect"))
+	{
 		CL_DisconnectPacket( from );
 		return;
 	}
 
 	// echo request from server
-	if ( !Q_stricmp(c, "echo") ) {
+	if ( !Q_stricmp(c, "echo") )
+	{
 		NET_OutOfBandPrint( NS_CLIENT, from, "%s", Cmd_Argv(1) );
 		return;
 	}
 
 	// cd check
-	if ( !Q_stricmp(c, "keyAuthorize") ) {
+	if ( !Q_stricmp(c, "keyAuthorize") )
+	{
 		// we don't use these now, so dump them on the floor
 		return;
 	}
 
 	// global MOTD from id
-	if ( !Q_stricmp(c, "motd") ) {
+	if ( !Q_stricmp(c, "motd") )
+	{
 		CL_MotdPacket( from );
 		return;
 	}
 
 	// echo request from server
-	if ( !Q_stricmp(c, "print") ) {
+	if ( !Q_stricmp(c, "print") )
+	{
 		s = MSG_ReadString( msg );
 		Q_strncpyz( clc.serverMessage, s, sizeof( clc.serverMessage ) );
 		Com_Printf( "%s", s );
@@ -2424,13 +2669,15 @@ void CL_ConnectionlessPacket( netadr_t from, msg_t *msg ) {
 	}
 
 	// list of servers sent back by a master server (classic)
-	if ( !Q_strncmp(c, "getserversResponse", 18) ) {
+	if ( !Q_strncmp(c, "getserversResponse", 18) )
+	{
 		CL_ServersResponsePacket( &from, msg, qfalse );
 		return;
 	}
 
 	// list of servers sent back by a master server (extended)
-	if ( !Q_strncmp(c, "getserversExtResponse", 21) ) {
+	if ( !Q_strncmp(c, "getserversExtResponse", 21) )
+	{
 		CL_ServersResponsePacket( &from, msg, qtrue );
 		return;
 	}
@@ -2446,21 +2693,26 @@ CL_PacketEvent
 A packet has arrived from the main event loop
 =================
 */
-void CL_PacketEvent( netadr_t from, msg_t *msg ) {
-	int		headerBytes;
+
+void CL_PacketEvent( netadr_t from, msg_t *msg )
+{
+	int	headerBytes;
 
 	clc.lastPacketTime = cls.realtime;
 
-	if ( msg->cursize >= 4 && *(int *)msg->data == -1 ) {
+	if ( msg->cursize >= 4 && *(int *)msg->data == -1 )
+	{
 		CL_ConnectionlessPacket( from, msg );
 		return;
 	}
 
-	if ( cls.state < CA_CONNECTED ) {
+	if ( cls.state < CA_CONNECTED )
+	{
 		return;		// can't be a valid sequenced packet
 	}
 
-	if ( msg->cursize < 4 ) {
+	if ( msg->cursize < 4 )
+	{
 		Com_Printf ("%s: Runt packet\n", NET_AdrToStringwPort( from ));
 		return;
 	}
@@ -2468,14 +2720,17 @@ void CL_PacketEvent( netadr_t from, msg_t *msg ) {
 	//
 	// packet from server
 	//
-	if ( !NET_CompareAdr( from, clc.netchan.remoteAddress ) ) {
-		Com_DPrintf ("%s:sequenced packet without connection\n"
-			, NET_AdrToStringwPort( from ) );
+	if ( !NET_CompareAdr( from, clc.netchan.remoteAddress ) )
+	{
+		if( com_developer->integer) // new Cowcat
+			Com_Printf ("%s:sequenced packet without connection\n", NET_AdrToStringwPort( from ) );
+
 		// FIXME: send a client disconnect?
 		return;
 	}
 
-	if (!CL_Netchan_Process( &clc.netchan, msg) ) {
+	if ( !CL_Netchan_Process( &clc.netchan, msg) )
+	{
 		return;		// out of order, duplicated, etc
 	}
 
@@ -2494,7 +2749,8 @@ void CL_PacketEvent( netadr_t from, msg_t *msg ) {
 	// we don't know if it is ok to save a demo message until
 	// after we have parsed the frame
 	//
-	if ( clc.demorecording && !clc.demowaiting ) {
+	if ( clc.demorecording && !clc.demowaiting )
+	{
 		CL_WriteDemoMessage( msg, headerBytes );
 	}
 }
@@ -2505,19 +2761,24 @@ CL_CheckTimeout
 
 ==================
 */
-void CL_CheckTimeout( void ) {
+void CL_CheckTimeout( void )
+{
 	//
 	// check timeout
 	//
-	if ( ( !CL_CheckPaused() || !sv_paused->integer ) 
-		&& cls.state >= CA_CONNECTED && cls.state != CA_CINEMATIC
-	    && cls.realtime - clc.lastPacketTime > cl_timeout->value*1000) {
-		if (++cl.timeoutcount > 5) {	// timeoutcount saves debugger
+	if ( ( !CL_CheckPaused() || !sv_paused->integer ) && cls.state >= CA_CONNECTED && cls.state != CA_CINEMATIC
+		&& cls.realtime - clc.lastPacketTime > cl_timeout->value*1000)
+	{
+		if (++cl.timeoutcount > 5)
+		{	// timeoutcount saves debugger
 			Com_Printf ("\nServer connection timed out.\n");
 			CL_Disconnect( qtrue );
 			return;
 		}
-	} else {
+	}
+
+	else
+	{
 		cl.timeoutcount = 0;
 	}
 }
@@ -2547,7 +2808,8 @@ CL_CheckUserinfo
 
 ==================
 */
-void CL_CheckUserinfo( void ) {
+void CL_CheckUserinfo( void )
+{
 	// don't add reliable commands when not yet connected
 	if(cls.state < CA_CHALLENGING)
 		return;
@@ -2560,7 +2822,7 @@ void CL_CheckUserinfo( void ) {
 	if(cvar_modifiedFlags & CVAR_USERINFO)
 	{
 		cvar_modifiedFlags &= ~CVAR_USERINFO;
-		CL_AddReliableCommand( va("userinfo \"%s\"", Cvar_InfoString( CVAR_USERINFO ) ) );
+		CL_AddReliableCommand( va("userinfo \"%s\"", Cvar_InfoString( CVAR_USERINFO ) ), qfalse );
 	}
 }
 
@@ -2570,20 +2832,22 @@ CL_Frame
 
 ==================
 */
-void CL_Frame ( int msec ) {
-//Com_Printf("CL_Frame...\n");
-
-	if ( !com_cl_running->integer ) {
+void CL_Frame ( int msec )
+{
+	if ( !com_cl_running->integer )
+	{
 		return;
 	}
 
 #ifdef USE_CURL
-	if(clc.downloadCURLM) {
+	if(clc.downloadCURLM)
+	{
 		CL_cURL_PerformDownload();
 		// we can't process frames normally when in disconnected
 		// download mode since the ui vm expects cls.state to be
 		// CA_CONNECTED
-		if(clc.cURLDisconnected) {
+		if(clc.cURLDisconnected)
+		{
 			cls.realFrametime = msec;
 			cls.frametime = msec;
 			cls.realtime += cls.frametime;
@@ -2596,43 +2860,47 @@ void CL_Frame ( int msec ) {
 	}
 #endif
 
-//Com_Printf("a\n");
-
-	if ( cls.cddialog ) {
+	if ( cls.cddialog )
+	{
 		// bring up the cd error dialog if needed
 		cls.cddialog = qfalse;
 		VM_Call( uivm, UI_SET_ACTIVE_MENU, UIMENU_NEED_CD );
-	} else	if ( cls.state == CA_DISCONNECTED && !( Key_GetCatcher( ) & KEYCATCH_UI )
-		&& !com_sv_running->integer && uivm ) {
+	}
+
+	else if ( cls.state == CA_DISCONNECTED && !( Key_GetCatcher( ) & KEYCATCH_UI ) && !com_sv_running->integer && uivm )
+	{
 		// if disconnected, bring up the menu
 		S_StopAllSounds();
 		VM_Call( uivm, UI_SET_ACTIVE_MENU, UIMENU_MAIN );
 	}
-//Com_Printf("b\n");
 
 	// if recording an avi, lock to a fixed fps
-	if ( CL_VideoRecording( ) && cl_aviFrameRate->integer && msec) {
+	if ( CL_VideoRecording( ) && cl_aviFrameRate->integer && msec)
+	{
 		// save the current screen
-		if ( cls.state == CA_ACTIVE || cl_forceavidemo->integer) {
+		if ( cls.state == CA_ACTIVE || cl_forceavidemo->integer)
+		{
 			CL_TakeVideoFrame( );
 
 			// fixed time for next frame'
 			msec = (int)ceil( (1000.0f / cl_aviFrameRate->value) * com_timescale->value );
+
 			if (msec == 0) {
 				msec = 1;
 			}
 		}
 	}
-//Com_Printf("c\n");
 	
-	if( cl_autoRecordDemo->integer ) {
-		if( cls.state == CA_ACTIVE && !clc.demorecording && !clc.demoplaying ) {
+	if( cl_autoRecordDemo->integer )
+	{
+		if( cls.state == CA_ACTIVE && !clc.demorecording && !clc.demoplaying )
+		{
 			// If not recording a demo, and we should be, start one
 			qtime_t	now;
-			char		*nowString;
-			char		*p;
-			char		mapName[ MAX_QPATH ];
-			char		serverName[ MAX_OSPATH ];
+			char	*nowString;
+			char	*p;
+			char	mapName[ MAX_QPATH ];
+			char	serverName[ MAX_OSPATH ];
 
 			Com_RealTime( &now );
 			nowString = va( "%04d%02d%02d%02d%02d%02d",
@@ -2647,6 +2915,7 @@ void CL_Frame ( int msec ) {
 			// Replace the ":" in the address as it is not a valid
 			// file name character
 			p = strstr( serverName, ":" );
+
 			if( p ) {
 				*p = '.';
 			}
@@ -2654,15 +2923,15 @@ void CL_Frame ( int msec ) {
 			Q_strncpyz( mapName, COM_SkipPath( cl.mapname ), sizeof( cl.mapname ) );
 			COM_StripExtension(mapName, mapName, sizeof(mapName));
 
-			Cbuf_ExecuteText( EXEC_NOW,
-					va( "record %s-%s-%s", nowString, serverName, mapName ) );
+			Cbuf_ExecuteText( EXEC_NOW, va( "record %s-%s-%s", nowString, serverName, mapName ) );
 		}
-		else if( cls.state != CA_ACTIVE && clc.demorecording ) {
+
+		else if( cls.state != CA_ACTIVE && clc.demorecording )
+		{
 			// Recording, but not CA_ACTIVE, so stop recording
 			CL_StopRecord_f( );
 		}
 	}
-//Com_Printf("d\n");
 
 	// save the msec before checking pause
 	cls.realFrametime = msec;
@@ -2672,39 +2941,32 @@ void CL_Frame ( int msec ) {
 
 	cls.realtime += cls.frametime;
 
-	if ( cl_timegraph->integer ) {
+	if ( cl_timegraph->integer )
+	{
 		SCR_DebugGraph ( cls.realFrametime * 0.25, 0 );
 	}
-//Com_Printf("e\n");
 
 	// see if we need to update any userinfo
 	CL_CheckUserinfo();
-//Com_Printf("f\n");
 
 	// if we haven't gotten a packet in a long time,
 	// drop the connection
-//Com_Printf("g\n");
 	CL_CheckTimeout();
 
 	// send intentions now
 	CL_SendCmd();
-//Com_Printf("h\n");
 
 	// resend a connection request if necessary
 	CL_CheckForResend();
-//Com_Printf("i\n");
 
 	// decide on the serverTime to render
 	CL_SetCGameTime();
-//Com_Printf("j\n");
 
 	// update the screen
 	SCR_UpdateScreen();
-//Com_Printf("k\n");
 
 	// update audio
 	S_Update();
-//Com_Printf("l\n");
 
 #ifdef USE_VOIP
 	CL_CaptureVoip();
@@ -2716,10 +2978,9 @@ void CL_Frame ( int msec ) {
 
 	// advance local effects for next frame
 	SCR_RunCinematic();
-//Com_Printf("m\n");
 
 	Con_RunConsole();
-//Com_Printf("...CL_Frame\n");
+
 	cls.framecount++;
 }
 
@@ -2733,19 +2994,27 @@ CL_RefPrintf
 DLL glue
 ================
 */
-void QDECL CL_RefPrintf( int print_level, const char *fmt, ...) {
+void QDECL CL_RefPrintf( int print_level, const char *fmt, ...)
+{
 	va_list		argptr;
 	char		msg[MAXPRINTMSG];
 	
-	va_start (argptr,fmt);
+	va_start (argptr, fmt);
 	Q_vsnprintf (msg, sizeof(msg), fmt, argptr);
 	va_end (argptr);
 
-	if ( print_level == PRINT_ALL ) {
+	if ( print_level == PRINT_ALL )
+	{
 		Com_Printf ("%s", msg);
-	} else if ( print_level == PRINT_WARNING ) {
+	}
+
+	else if ( print_level == PRINT_WARNING )
+	{
 		Com_Printf (S_COLOR_YELLOW "%s", msg);		// yellow
-	} else if ( print_level == PRINT_DEVELOPER ) {
+	}
+
+	else if ( print_level == PRINT_DEVELOPER )
+	{
 		Com_DPrintf (S_COLOR_RED "%s", msg);		// red
 	}
 }
@@ -2757,11 +3026,13 @@ void QDECL CL_RefPrintf( int print_level, const char *fmt, ...) {
 CL_ShutdownRef
 ============
 */
-void CL_ShutdownRef( void ) {
-	if ( !re.Shutdown ) {
-		return;
+void CL_ShutdownRef( void )
+{
+	if ( re.Shutdown )
+	{
+		re.Shutdown( qtrue );
 	}
-	re.Shutdown( qtrue );
+	
 	Com_Memset( &re, 0, sizeof( re ) );
 }
 
@@ -2770,7 +3041,8 @@ void CL_ShutdownRef( void ) {
 CL_InitRenderer
 ============
 */
-void CL_InitRenderer( void ) {
+void CL_InitRenderer( void )
+{
 	// this sets up the renderer and calls R_Init
 	re.BeginRegistration( &cls.glconfig );
 
@@ -2790,7 +3062,8 @@ After the server has cleared the hunk, these will need to be restarted
 This is the only place that any of these functions are called from
 ============================
 */
-void CL_StartHunkUsers( qboolean rendererOnly ) {
+void CL_StartHunkUsers( qboolean rendererOnly )
+{
 	if (!com_cl_running) {
 		return;
 	}
@@ -2799,7 +3072,8 @@ void CL_StartHunkUsers( qboolean rendererOnly ) {
 		return;
 	}
 
-	if ( !cls.rendererStarted ) {
+	if ( !cls.rendererStarted )
+	{
 		cls.rendererStarted = qtrue;
 		CL_InitRenderer();
 	}
@@ -2808,12 +3082,14 @@ void CL_StartHunkUsers( qboolean rendererOnly ) {
 		return;
 	}
 
-	if ( !cls.soundStarted ) {
+	if ( !cls.soundStarted )
+	{
 		cls.soundStarted = qtrue;
 		S_Init();
 	}
 
-	if ( !cls.soundRegistered ) {
+	if ( !cls.soundRegistered )
+	{
 		cls.soundRegistered = qtrue;
 		S_BeginRegistration();
 	}
@@ -2822,7 +3098,8 @@ void CL_StartHunkUsers( qboolean rendererOnly ) {
 		return;
 	}
 
-	if ( !cls.uiStarted ) {
+	if ( !cls.uiStarted )
+	{
 		cls.uiStarted = qtrue;
 		CL_InitUI();
 	}
@@ -2833,11 +3110,13 @@ void CL_StartHunkUsers( qboolean rendererOnly ) {
 CL_RefMalloc
 ============
 */
-void *CL_RefMalloc( int size ) {
+void *CL_RefMalloc( int size )
+{
 	return Z_TagMalloc( size, TAG_RENDERER );
 }
 
-int CL_ScaledMilliseconds(void) {
+int CL_ScaledMilliseconds(void)
+{
 	return Sys_Milliseconds()*com_timescale->value;
 }
 
@@ -2846,7 +3125,8 @@ int CL_ScaledMilliseconds(void) {
 CL_InitRef
 ============
 */
-void CL_InitRef( void ) {
+void CL_InitRef( void )
+{
 	refimport_t	ri;
 	refexport_t	*ret;
 
@@ -2911,15 +3191,21 @@ void CL_InitRef( void ) {
 //===========================================================================================
 
 
-void CL_SetModel_f( void ) {
+void CL_SetModel_f( void )
+{
 	char	*arg;
 	char	name[256];
 
 	arg = Cmd_Argv( 1 );
-	if (arg[0]) {
+
+	if (arg[0])
+	{
 		Cvar_Set( "model", arg );
 		Cvar_Set( "headmodel", arg );
-	} else {
+	}
+
+	else
+	{
 		Cvar_VariableStringBuffer( "model", name, sizeof(name) );
 		Com_Printf("model is set to %s\n", name);
 	}
@@ -2994,7 +3280,7 @@ CL_StopVideo_f
 */
 void CL_StopVideo_f( void )
 {
-  CL_CloseAVI( );
+	CL_CloseAVI( );
 }
 
 /*
@@ -3007,31 +3293,37 @@ it by filling it with 2048 bytes of random data.
 */
 static void CL_GenerateQKey(void)
 {
-	int len = 0;
-	unsigned char buff[ QKEY_SIZE ];
-	fileHandle_t f;
+	int		len = 0;
+	unsigned char	buff[ QKEY_SIZE ];
+	fileHandle_t	f;
 
 	len = FS_SV_FOpenFileRead( QKEY_FILE, &f );
 	FS_FCloseFile( f );
-	if( len == QKEY_SIZE ) {
+
+	if( len == QKEY_SIZE )
+	{
 		Com_Printf( "QKEY found.\n" );
 		return;
 	}
-	else {
-		if( len > 0 ) {
-			Com_Printf( "QKEY file size != %d, regenerating\n",
-				QKEY_SIZE );
+
+	else
+	{
+		if( len > 0 )
+		{
+			Com_Printf( "QKEY file size != %d, regenerating\n", QKEY_SIZE );
 		}
 
 		Com_Printf( "QKEY building random string\n" );
 		Com_RandomBytes( buff, sizeof(buff) );
 
 		f = FS_SV_FOpenFileWrite( QKEY_FILE );
-		if( !f ) {
-			Com_Printf( "QKEY could not open %s for write\n",
-				QKEY_FILE );
+
+		if( !f )
+		{
+			Com_Printf( "QKEY could not open %s for write\n", QKEY_FILE );
 			return;
 		}
+
 		FS_Write( buff, sizeof(buff), f );
 		FS_FCloseFile( f );
 		Com_Printf( "QKEY generated\n" );
@@ -3043,7 +3335,8 @@ static void CL_GenerateQKey(void)
 CL_Init
 ====================
 */
-void CL_Init( void ) {
+void CL_Init( void )
+{
 	Com_Printf( "----- Client Initialization -----\n" );
 
 	Con_Init ();
@@ -3086,6 +3379,7 @@ void CL_Init( void ) {
 	cl_anglespeedkey = Cvar_Get ("cl_anglespeedkey", "1.5", 0);
 
 	cl_maxpackets = Cvar_Get ("cl_maxpackets", "30", CVAR_ARCHIVE );
+	Cvar_CheckRange ( cl_maxpackets, 15, 125, qtrue );		// Quake3e - Cowcat
 	cl_packetdup = Cvar_Get ("cl_packetdup", "1", CVAR_ARCHIVE );
 
 	cl_run = Cvar_Get ("cl_run", "1", CVAR_ARCHIVE);
@@ -3179,14 +3473,14 @@ void CL_Init( void ) {
 	//  This might work on rates lower than 25000, but for safety's sake, we'll
 	//  just demand it. Who doesn't have at least a DSL line now, anyhow? If
 	//  you don't, you don't need VoIP.  :)
-	if ((cl_voip->integer) && (Cvar_VariableIntegerValue("rate") < 25000)) {
+	if ((cl_voip->integer) && (Cvar_VariableIntegerValue("rate") < 25000))
+	{
 		Com_Printf("Your network rate is too slow for VoIP.\n");
 		Com_Printf("Set 'Data Rate' to 'LAN/Cable/xDSL' in 'Setup/System/Network' and restart.\n");
 		Com_Printf("Until then, VoIP is disabled.\n");
 		Cvar_Set("cl_voip", "0");
 	}
 #endif
-
 
 	// cgame might not be initialized before menu is used
 	Cvar_Get ("cg_viewsize", "100", CVAR_ARCHIVE );
@@ -3222,6 +3516,7 @@ void CL_Init( void ) {
 	Cmd_AddCommand ("model", CL_SetModel_f );
 	Cmd_AddCommand ("video", CL_Video_f );
 	Cmd_AddCommand ("stopvideo", CL_StopVideo_f );
+
 	CL_InitRef();
 
 	SCR_Init ();
@@ -3244,7 +3539,8 @@ CL_Shutdown
 
 ===============
 */
-void CL_Shutdown( void ) {
+void CL_Shutdown( void )
+{
 	static qboolean recursive = qfalse;
 	
 	// check whether the client is running at all.
@@ -3253,10 +3549,12 @@ void CL_Shutdown( void ) {
 	
 	Com_Printf( "----- CL_Shutdown -----\n" );
 
-	if ( recursive ) {
+	if ( recursive )
+	{
 		Com_Printf( "WARNING: Recursive shutdown\n" );
 		return;
 	}
+
 	recursive = qtrue;
 
 	CL_Disconnect( qtrue );
@@ -3299,9 +3597,12 @@ void CL_Shutdown( void ) {
 
 }
 
-static void CL_SetServerInfo(serverInfo_t *server, const char *info, int ping) {
-	if (server) {
-		if (info) {
+static void CL_SetServerInfo(serverInfo_t *server, const char *info, int ping)
+{
+	if (server)
+	{
+		if (info)
+		{
 			server->clients = atoi(Info_ValueForKey(info, "clients"));
 			Q_strncpyz(server->hostName,Info_ValueForKey(info, "hostname"), MAX_NAME_LENGTH);
 			Q_strncpyz(server->mapName, Info_ValueForKey(info, "mapname"), MAX_NAME_LENGTH);
@@ -3313,26 +3614,31 @@ static void CL_SetServerInfo(serverInfo_t *server, const char *info, int ping) {
 			server->maxPing = atoi(Info_ValueForKey(info, "maxping"));
 			server->punkbuster = atoi(Info_ValueForKey(info, "punkbuster"));
 		}
+
 		server->ping = ping;
 	}
 }
 
-static void CL_SetServerInfoByAddress(netadr_t from, const char *info, int ping) {
+static void CL_SetServerInfoByAddress(netadr_t from, const char *info, int ping)
+{
 	int i;
 
-	for (i = 0; i < MAX_OTHER_SERVERS; i++) {
+	for (i = 0; i < MAX_OTHER_SERVERS; i++)
+	{
 		if (NET_CompareAdr(from, cls.localServers[i].adr)) {
 			CL_SetServerInfo(&cls.localServers[i], info, ping);
 		}
 	}
 
-	for (i = 0; i < MAX_GLOBAL_SERVERS; i++) {
+	for (i = 0; i < MAX_GLOBAL_SERVERS; i++)
+	{
 		if (NET_CompareAdr(from, cls.globalServers[i].adr)) {
 			CL_SetServerInfo(&cls.globalServers[i], info, ping);
 		}
 	}
 
-	for (i = 0; i < MAX_OTHER_SERVERS; i++) {
+	for (i = 0; i < MAX_OTHER_SERVERS; i++)
+	{
 		if (NET_CompareAdr(from, cls.favoriteServers[i].adr)) {
 			CL_SetServerInfo(&cls.favoriteServers[i], info, ping);
 		}
@@ -3345,17 +3651,20 @@ static void CL_SetServerInfoByAddress(netadr_t from, const char *info, int ping)
 CL_ServerInfoPacket
 ===================
 */
-void CL_ServerInfoPacket( netadr_t from, msg_t *msg ) {
-	int		i, type;
+void CL_ServerInfoPacket( netadr_t from, msg_t *msg )
+{
+	int	i, type;
 	char	info[MAX_INFO_STRING];
 	char	*infoString;
-	int		prot;
+	int	prot;
 
 	infoString = MSG_ReadString( msg );
 
 	// if this isn't the correct protocol version, ignore it
 	prot = atoi( Info_ValueForKey( infoString, "protocol" ) );
-	if ( prot != PROTOCOL_VERSION ) {
+
+	if ( prot != PROTOCOL_VERSION )
+	{
 		Com_DPrintf( "Different protocol info packet: %s\n", infoString );
 		return;
 	}
@@ -3367,7 +3676,9 @@ void CL_ServerInfoPacket( netadr_t from, msg_t *msg ) {
 		{
 			// calc ping time
 			cl_pinglist[i].time = cls.realtime - cl_pinglist[i].start + 1;
-			Com_DPrintf( "ping time %dms from %s\n", cl_pinglist[i].time, NET_AdrToString( from ) );
+			
+			if (com_developer->integer) // new Cowcat
+				Com_Printf( "ping time %dms from %s\n", cl_pinglist[i].time, NET_AdrToString( from ) );
 
 			// save of info
 			Q_strncpyz( cl_pinglist[i].info, infoString, sizeof( cl_pinglist[i].info ) );
@@ -3389,6 +3700,7 @@ void CL_ServerInfoPacket( netadr_t from, msg_t *msg ) {
 					type = 0;
 					break;
 			}
+
 			Info_SetValueForKey( cl_pinglist[i].info, "nettype", va("%d", type) );
 			CL_SetServerInfoByAddress(from, infoString, cl_pinglist[i].time);
 
@@ -3401,7 +3713,8 @@ void CL_ServerInfoPacket( netadr_t from, msg_t *msg ) {
 		return;
 	}
 
-	for ( i = 0 ; i < MAX_OTHER_SERVERS ; i++ ) {
+	for ( i = 0 ; i < MAX_OTHER_SERVERS ; i++ )
+	{
 		// empty slot
 		if ( cls.localServers[i].adr.port == 0 ) {
 			break;
@@ -3413,31 +3726,27 @@ void CL_ServerInfoPacket( netadr_t from, msg_t *msg ) {
 		}
 	}
 
-	if ( i == MAX_OTHER_SERVERS ) {
+	if ( i == MAX_OTHER_SERVERS )
+	{
 		Com_DPrintf( "MAX_OTHER_SERVERS hit, dropping infoResponse\n" );
 		return;
 	}
 
+	
 	// add this to the list
 	cls.numlocalservers = i+1;
-	cls.localServers[i].adr = from;
-	cls.localServers[i].clients = 0;
-	cls.localServers[i].hostName[0] = '\0';
-	cls.localServers[i].mapName[0] = '\0';
-	cls.localServers[i].maxClients = 0;
-	cls.localServers[i].maxPing = 0;
-	cls.localServers[i].minPing = 0;
-	cls.localServers[i].ping = -1;
-	cls.localServers[i].game[0] = '\0';
-	cls.localServers[i].gameType = 0;
-	cls.localServers[i].netType = from.type;
-	cls.localServers[i].punkbuster = 0;
+
+	CL_InitServerInfo( &cls.localServers[i], &from );
 									 
 	Q_strncpyz( info, MSG_ReadString( msg ), MAX_INFO_STRING );
-	if (strlen(info)) {
-		if (info[strlen(info)-1] != '\n') {
-			strncat(info, "\n", sizeof(info) - 1);
+
+	if (strlen(info))
+	{
+		if (info[strlen(info)-1] != '\n')
+		{
+			Q_strcat(info, sizeof(info), "\n" );
 		}
+
 		Com_Printf( "%s: %s", NET_AdrToStringwPort( from ), info );
 	}
 }
@@ -3447,32 +3756,44 @@ void CL_ServerInfoPacket( netadr_t from, msg_t *msg ) {
 CL_GetServerStatus
 ===================
 */
-serverStatus_t *CL_GetServerStatus( netadr_t from ) {
+serverStatus_t *CL_GetServerStatus( netadr_t from )
+{
 	serverStatus_t *serverStatus;
 	int i, oldest, oldestTime;
 
 	serverStatus = NULL;
-	for (i = 0; i < MAX_SERVERSTATUSREQUESTS; i++) {
+
+	for (i = 0; i < MAX_SERVERSTATUSREQUESTS; i++)
+	{
 		if ( NET_CompareAdr( from, cl_serverStatusList[i].address ) ) {
 			return &cl_serverStatusList[i];
 		}
 	}
-	for (i = 0; i < MAX_SERVERSTATUSREQUESTS; i++) {
+
+	for (i = 0; i < MAX_SERVERSTATUSREQUESTS; i++)
+	{
 		if ( cl_serverStatusList[i].retrieved ) {
 			return &cl_serverStatusList[i];
 		}
 	}
+
 	oldest = -1;
 	oldestTime = 0;
-	for (i = 0; i < MAX_SERVERSTATUSREQUESTS; i++) {
-		if (oldest == -1 || cl_serverStatusList[i].startTime < oldestTime) {
+
+	for (i = 0; i < MAX_SERVERSTATUSREQUESTS; i++)
+	{
+		if (oldest == -1 || cl_serverStatusList[i].startTime < oldestTime)
+		{
 			oldest = i;
 			oldestTime = cl_serverStatusList[i].startTime;
 		}
 	}
-	if (oldest != -1) {
+
+	if (oldest != -1)
+	{
 		return &cl_serverStatusList[oldest];
 	}
+
 	serverStatusCount++;
 	return &cl_serverStatusList[serverStatusCount & (MAX_SERVERSTATUSREQUESTS-1)];
 }
@@ -3482,41 +3803,54 @@ serverStatus_t *CL_GetServerStatus( netadr_t from ) {
 CL_ServerStatus
 ===================
 */
-int CL_ServerStatus( char *serverAddress, char *serverStatusString, int maxLen ) {
-	int i;
+int CL_ServerStatus( char *serverAddress, char *serverStatusString, int maxLen )
+{
+	int 		i;
 	netadr_t	to;
-	serverStatus_t *serverStatus;
+	serverStatus_t	*serverStatus;
 
 	// if no server address then reset all server status requests
-	if ( !serverAddress ) {
-		for (i = 0; i < MAX_SERVERSTATUSREQUESTS; i++) {
+	if ( !serverAddress )
+	{
+		for (i = 0; i < MAX_SERVERSTATUSREQUESTS; i++)
+		{
 			cl_serverStatusList[i].address.port = 0;
 			cl_serverStatusList[i].retrieved = qtrue;
 		}
+
 		return qfalse;
 	}
+
 	// get the address
-	if ( !NET_StringToAdr( serverAddress, &to, NA_UNSPEC) ) {
+	if ( !NET_StringToAdr( serverAddress, &to, NA_UNSPEC) )
+	{
 		return qfalse;
 	}
+
 	serverStatus = CL_GetServerStatus( to );
+
 	// if no server status string then reset the server status request for this address
-	if ( !serverStatusString ) {
+	if ( !serverStatusString )
+	{
 		serverStatus->retrieved = qtrue;
 		return qfalse;
 	}
 
 	// if this server status request has the same address
-	if ( NET_CompareAdr( to, serverStatus->address) ) {
+	if ( NET_CompareAdr( to, serverStatus->address) )
+	{
 		// if we recieved an response for this server status request
-		if (!serverStatus->pending) {
+		if (!serverStatus->pending)
+		{
 			Q_strncpyz(serverStatusString, serverStatus->string, maxLen);
 			serverStatus->retrieved = qtrue;
 			serverStatus->startTime = 0;
 			return qtrue;
 		}
+
 		// resend the request regularly
-		else if ( serverStatus->startTime < Com_Milliseconds() - cl_serverStatusResendTime->integer ) {
+		else if ( serverStatus->startTime < Com_Milliseconds() - cl_serverStatusResendTime->integer )
+		{
 			serverStatus->print = qfalse;
 			serverStatus->pending = qtrue;
 			serverStatus->retrieved = qfalse;
@@ -3526,8 +3860,10 @@ int CL_ServerStatus( char *serverAddress, char *serverStatusString, int maxLen )
 			return qfalse;
 		}
 	}
+
 	// if retrieved
-	else if ( serverStatus->retrieved ) {
+	else if ( serverStatus->retrieved )
+	{
 		serverStatus->address = to;
 		serverStatus->print = qfalse;
 		serverStatus->pending = qtrue;
@@ -3537,6 +3873,7 @@ int CL_ServerStatus( char *serverAddress, char *serverStatusString, int maxLen )
 		NET_OutOfBandPrint( NS_CLIENT, to, "getstatus" );
 		return qfalse;
 	}
+
 	return qfalse;
 }
 
@@ -4078,11 +4415,12 @@ qboolean CL_UpdateVisiblePings_f(int source) {
 CL_ServerStatus_f
 ==================
 */
-void CL_ServerStatus_f(void) {
+void CL_ServerStatus_f(void)
+{
 	netadr_t	to, *toptr = NULL;
 	char		*server;
-	serverStatus_t *serverStatus;
-	int			argc;
+	serverStatus_t	*serverStatus;
+	int		argc;
 	netadrtype_t	family = NA_UNSPEC;
 
 	argc = Cmd_Argc();
@@ -4105,6 +4443,7 @@ void CL_ServerStatus_f(void) {
 	
 		if(argc == 2)
 			server = Cmd_Argv(1);
+
 		else
 		{
 			if(!strcmp(Cmd_Argv(1), "-4"))
@@ -4120,6 +4459,7 @@ void CL_ServerStatus_f(void) {
 		}
 
 		toptr = &to;
+
 		if ( !NET_StringToAdr( server, toptr, family ) )
 			return;
 	}
@@ -4137,41 +4477,50 @@ void CL_ServerStatus_f(void) {
 CL_ShowIP_f
 ==================
 */
-void CL_ShowIP_f(void) {
+void CL_ShowIP_f(void)
+{
 	Sys_ShowIP();
 }
 
-#ifndef STANDALONE
 /*
 =================
 bool CL_CDKeyValidate
 =================
 */
-qboolean CL_CDKeyValidate( const char *key, const char *checksum ) {
-	#ifdef OPEN_ARENA
+qboolean CL_CDKeyValidate( const char *key, const char *checksum )
+{
+#ifdef STANDALONE
 	return qtrue;
-	#else
+#else
+
 	char	ch;
 	byte	sum;
 	char	chs[3];
 	int i, len;
 
 	len = strlen(key);
-	if( len != CDKEY_LEN ) {
+
+	if( len != CDKEY_LEN )
+	{
 		return qfalse;
 	}
 
-	if( checksum && strlen( checksum ) != CDCHKSUM_LEN ) {
+	if( checksum && strlen( checksum ) != CDCHKSUM_LEN )
+	{
 		return qfalse;
 	}
 
 	sum = 0;
+
 	// for loop gets rid of conditional assignment warning
-	for (i = 0; i < len; i++) {
+	for (i = 0; i < len; i++)
+	{
 		ch = *key++;
+
 		if (ch>='a' && ch<='z') {
 			ch -= 32;
 		}
+
 		switch( ch ) {
 		case '2':
 		case '3':
@@ -4207,6 +4556,7 @@ qboolean CL_CDKeyValidate( const char *key, const char *checksum ) {
 	}
 
 	return qfalse;
-	#endif
-}
 #endif
+}
+
+

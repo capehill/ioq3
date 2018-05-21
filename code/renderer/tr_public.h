@@ -24,7 +24,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "tr_types.h"
 
-#define	REF_API_VERSION		8
+#define	REF_API_VERSION	8
 
 //
 // these are the functions exported by the refresh module
@@ -64,7 +64,7 @@ typedef struct {
 	void	(*ClearScene)( void );
 	void	(*AddRefEntityToScene)( const refEntity_t *re );
 	void	(*AddPolyToScene)( qhandle_t hShader , int numVerts, const polyVert_t *verts, int num );
-	int		(*LightForPoint)( vec3_t point, vec3_t ambientLight, vec3_t directedLight, vec3_t lightDir );
+	int	(*LightForPoint)( vec3_t point, vec3_t ambientLight, vec3_t directedLight, vec3_t lightDir );
 	void	(*AddLightToScene)( const vec3_t org, float intensity, float r, float g, float b );
 	void	(*AddAdditiveLightToScene)( const vec3_t org, float intensity, float r, float g, float b );
 	void	(*RenderScene)( const refdef_t *fd );
@@ -83,11 +83,10 @@ typedef struct {
 	void	(*EndFrame)( int *frontEndMsec, int *backEndMsec );
 
 
-	int		(*MarkFragments)( int numPoints, const vec3_t *points, const vec3_t projection,
-				   int maxPoints, vec3_t pointBuffer, int maxFragments, markFragment_t *fragmentBuffer );
+	int	(*MarkFragments)( int numPoints, const vec3_t *points, const vec3_t projection,
+			int maxPoints, vec3_t pointBuffer, int maxFragments, markFragment_t *fragmentBuffer );
 
-	int		(*LerpTag)( orientation_t *tag,  qhandle_t model, int startFrame, int endFrame, 
-					 float frac, const char *tagName );
+	int	(*LerpTag)( orientation_t *tag,  qhandle_t model, int startFrame, int endFrame, float frac, const char *tagName );
 	void	(*ModelBounds)( qhandle_t model, vec3_t mins, vec3_t maxs );
 
 #ifdef __USEA3D
@@ -113,7 +112,7 @@ typedef struct {
 
 	// milliseconds should only be used for profiling, never
 	// for anything game related.  Get time from the refdef
-	int		(*Milliseconds)( void );
+	int	(*Milliseconds)( void );
 
 	// stack based memory allocation for per-level things that
 	// won't be freed
@@ -136,7 +135,7 @@ typedef struct {
 	void	(*Cmd_AddCommand)( const char *name, void(*cmd)(void) );
 	void	(*Cmd_RemoveCommand)( const char *name );
 
-	int		(*Cmd_Argc) (void);
+	int	(*Cmd_Argc) (void);
 	char	*(*Cmd_Argv) (int i);
 
 	void	(*Cmd_ExecuteText) (int exec_when, const char *text);
@@ -146,8 +145,8 @@ typedef struct {
 
 	// a -1 return means the file does not exist
 	// NULL can be passed for buf to just determine existance
-	int		(*FS_FileIsInPAK)( const char *name, int *pCheckSum );
-	int		(*FS_ReadFile)( const char *name, void **buf );
+	int	(*FS_FileIsInPAK)( const char *name, int *pCheckSum );
+	int	(*FS_ReadFile)( const char *name, void **buf );
 	void	(*FS_FreeFile)( void *buf );
 	char **	(*FS_ListFiles)( const char *name, const char *extension, int *numfilesfound );
 	void	(*FS_FreeFileList)( char **filelist );
@@ -156,7 +155,7 @@ typedef struct {
 
 	// cinematic stuff
 	void	(*CIN_UploadCinematic)(int handle);
-	int		(*CIN_PlayCinematic)( const char *arg0, int xpos, int ypos, int width, int height, int bits);
+	int	(*CIN_PlayCinematic)( const char *arg0, int xpos, int ypos, int width, int height, int bits);
 	e_status (*CIN_RunCinematic) (int handle);
 
 	void	(*CL_WriteAVIVideoFrame)( const byte *buffer, int size );
@@ -166,6 +165,6 @@ typedef struct {
 // this is the only function actually exported at the linker level
 // If the module can't init to a valid rendering state, NULL will be
 // returned.
-refexport_t*GetRefAPI( int apiVersion, refimport_t *rimp );
+refexport_t *GetRefAPI( int apiVersion, refimport_t *rimp );
 
 #endif	// __TR_PUBLIC_H

@@ -658,7 +658,7 @@ static void FillCloudBox( const shader_t *shader, int stage )
 */
 void R_BuildCloudData( shaderCommands_t *input )
 {
-	int		i;
+	//int		i;
 	shader_t	*shader;
 
 	shader = input->shader;
@@ -672,8 +672,10 @@ void R_BuildCloudData( shaderCommands_t *input )
 	tess.numIndexes = 0;
 	tess.numVertexes = 0;
 
-	if ( input->shader->sky.cloudHeight )
+	if ( shader->sky.cloudHeight )
 	{
+		#if 0
+
 		for ( i = 0; i < MAX_SHADER_STAGES; i++ )
 		{
 			if ( !tess.xstages[i] )
@@ -683,6 +685,12 @@ void R_BuildCloudData( shaderCommands_t *input )
 
 			FillCloudBox( input->shader, i );
 		}
+
+		#else // spearmint - Cowcat
+
+		FillCloudBox( shader, 0 );
+
+		#endif
 	}
 }
 
@@ -739,8 +747,10 @@ void R_InitSkyTexCoords( float heightCloud )
 				// compute vector from world origin to intersection point 'v'
 				VectorNormalize( v );
 
-				sRad = Q_acos( v[0] );
-				tRad = Q_acos( v[1] );
+				//sRad = Q_acos( v[0] );
+				//tRad = Q_acos( v[1] );
+				sRad = acos( v[0] ); // Cowcat
+				tRad = acos( v[1] );
 
 				s_cloudTexCoords[i][t][s][0] = sRad;
 				s_cloudTexCoords[i][t][s][1] = tRad;
@@ -754,7 +764,7 @@ void R_InitSkyTexCoords( float heightCloud )
 /*
 ** RB_DrawSun
 */
-void RB_DrawSun(float scale, shader_t *shader) // updated - Cowcat
+void RB_DrawSun(float scale, shader_t *shader)
 {
 	float		size;
 	float		dist;
@@ -836,7 +846,7 @@ void RB_StageIteratorSky( void )
 		
 		qglPushMatrix ();
 		GL_State( 0 );
-		GL_Cull (CT_FRONT_SIDED); // new ioq3 - Cowcat
+		GL_Cull (CT_FRONT_SIDED);
 
 		qglTranslatef (backEnd.viewParms.or.origin[0], backEnd.viewParms.or.origin[1], backEnd.viewParms.or.origin[2]);
 

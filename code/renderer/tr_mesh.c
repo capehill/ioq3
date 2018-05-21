@@ -186,7 +186,7 @@ int R_ComputeLOD( trRefEntity_t *ent )
 	mdrHeader_t 	*mdr;
 	mdrFrame_t 	*mdrframe;
 #endif
-	int lod;
+	int 		lod;
 
 	if ( tr.currentModel->numLods < 2 )
 	{
@@ -202,7 +202,8 @@ int R_ComputeLOD( trRefEntity_t *ent )
 #ifdef RAVENMD4
 		// This is an MDR model.
 		
-		if(tr.currentModel->md4)
+		//if(tr.currentModel->md4)
+		if(tr.currentModel->type == MOD_MDR)
 		{
 			int frameSize;
 			mdr = (mdrHeader_t *) tr.currentModel->md4;
@@ -402,7 +403,7 @@ void R_AddMD3Surfaces( trRefEntity_t *ent )
 
 		else if ( ent->e.customSkin > 0 && ent->e.customSkin < tr.numSkins )
 		{
-			skin_t *skin;
+			skin_t	*skin;
 			int	j;
 
 			skin = R_GetSkinByHandle( ent->e.customSkin );
@@ -413,11 +414,9 @@ void R_AddMD3Surfaces( trRefEntity_t *ent )
 			for ( j = 0 ; j < skin->numSurfaces ; j++ )
 			{
 				// the names have both been lowercased
-				//if ( !strcmp( skin->surfaces[j]->name, surface->name ) )
-				if ( !strcmp( skin->surfaces[j].name, surface->name ) ) // new ioq3 - Cowcat
+				if ( !strcmp( skin->surfaces[j].name, surface->name ) )
 				{
-					//shader = skin->surfaces[j]->shader;
-					shader = skin->surfaces[j].shader; // new ioq3 - Cowcat
+					shader = skin->surfaces[j].shader;
 					break;
 				}
 			}
@@ -455,7 +454,7 @@ void R_AddMD3Surfaces( trRefEntity_t *ent )
 			&& !(ent->e.renderfx & ( RF_NOSHADOW | RF_DEPTHHACK ) ) 
 			&& shader->sort == SS_OPAQUE )
 		{
-			R_AddDrawSurf( (void *)surface, tr.shadowShader, 0, qfalse );
+			R_AddDrawSurf( (void *)surface, tr.shadowShader, 0, 0 );
 		}
 
 		// projection shadows work fine with personal models
@@ -464,13 +463,13 @@ void R_AddMD3Surfaces( trRefEntity_t *ent )
 			&& (ent->e.renderfx & RF_SHADOW_PLANE )
 			&& shader->sort == SS_OPAQUE )
 		{
-			R_AddDrawSurf( (void *)surface, tr.projectionShadowShader, 0, qfalse );
+			R_AddDrawSurf( (void *)surface, tr.projectionShadowShader, 0, 0 );
 		}
 
 		// don't add third_person objects if not viewing through a portal
 		if ( !personalModel )
 		{
-			R_AddDrawSurf( (void *)surface, shader, fogNum, qfalse );
+			R_AddDrawSurf( (void *)surface, shader, fogNum, 0 );
 		}
 
 		surface = (md3Surface_t *)( (byte *)surface + surface->ofsEnd );

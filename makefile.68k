@@ -3,10 +3,14 @@ B = ioquake3_objs
 
 CC = vc +aos68k
 INCLUDES = -ISystem:PosixLib/include # -ISystem:amitcp/netinclude
+INCLUDES_ATCP = -ISystem:amitcp/netinclude
 
-CFLAGS = -c99 -O2 -speed -cpu=68060 -fpu=68060 -maxoptpasses=20 $(INCLUDES) -DAMIGA -DMINIGL -DBOTLIB -DNO_VM_COMPILED
+CFLAGS = -c99 -O2 -speed -cpu=68060 -fpu=68060 -maxoptpasses=20 $(INCLUDES) -DAMIGA -DBOTLIB -DNO_VM_COMPILED
+CFLAGS_ATCP = -c99 -O2 -speed -cpu=68060 -fpu=68060 -maxoptpasses=20 $(INCLUDES_ATCP) -DAMIGA -DBOTLIB -DNO_VM_COMPILED
 
 DO_CC = $(CC) $(CFLAGS) -o $@ -c $<
+DO_CC_ATCP = $(CC) $(CFLAGS_ATCP) -o $@ -c $<
+
 LIBS  = -lm060 -lmglQ3 -lposix -lamiga
 
 #VM_JIT = vm_ppc.o

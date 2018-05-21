@@ -54,16 +54,17 @@ void SetPlaneSignbits (cplane_t *out)
 #define BOX_LEAFS		2
 #define BOX_PLANES		12
 
-#if defined(AMIGA) && defined(__VBCC__) && defined (__PPC__)
+#if defined(AMIGA) && defined(__VBCC__)
 
 #undef LittleShort
 #undef LittleLong
 #undef LittleFloat
 
+#if defined (__PPC__)
+
 short __LittleShort(__reg("r4") short ) =
-	"\trlwinm\t0,4,8,16,24\n"
-	"\trlwimi\t0,4,24,24,31\n"
-	"\textsh\t3,0";
+	"\trlwinm\t3,4,24,24,31\n"
+	"\trlwimi\t3,4,8,16,23";
 
 int __LittleLong(__reg("r4") int) =
 	"\trlwinm\t3,4,24,0,31\n"
@@ -78,6 +79,25 @@ float __LittleFloat(__reg("f1") float) =
 	"\tstwbrx\tr3,r1,r0\n"
 	"\tlfs\tf1,24(r1)\n"
 	"\taddi\tr1,r1,32";
+
+#else // 68k
+
+short __LittleShort(__reg("d0") short ) =
+	"\trol.w\t#8,d0";
+
+int __LittleLong(__reg("d0") int) =
+	"\trol.w\t#8,d0\n"
+	"\tswap\td0\n"
+	"\trol.w\t#8,d0";
+
+float __LittleFloat(__reg("fp0") float) =
+	"\tfmove.s\tfp0,d0\n"
+	"\trol.w\t#8,d0\n"
+	"\tswap\td0\n"
+	"\trol.w\t#8,d0\n"
+	"\tfmove.s\td0,fp0";
+
+#endif
 
 #define LittleShort(x) __LittleShort(x)
 #define LittleLong(x) __LittleLong(x)
@@ -317,6 +337,7 @@ void CMod_LoadBrushes( lump_t *l )
 		{
 			Com_Error( ERR_DROP, "CMod_LoadBrushes: bad shaderNum: %i", out->shaderNum );
 		}
+
 		out->contents = cm.shaders[out->shaderNum].contentFlags;
 
 		CM_BoundBrush( out );
@@ -537,7 +558,7 @@ void CMod_LoadEntityString( lump_t *l )
 CMod_LoadVisibility
 =================
 */
-#define VIS_HEADER	8
+#define VIS_HEADER 8
 
 void CMod_LoadVisibility( lump_t *l )
 {
@@ -571,7 +592,7 @@ void CMod_LoadVisibility( lump_t *l )
 CMod_LoadPatches
 =================
 */
-#define MAX_PATCH_VERTS		1024
+#define MAX_PATCH_VERTS	1024
 
 void CMod_LoadPatches( lump_t *surfs, lump_t *verts )
 {
@@ -672,7 +693,11 @@ Loads in the map and all submodels
 */
 void CM_LoadMap( const char *name, qboolean clientload, int *checksum )
 {
-	int		*buf;
+	union {
+		int	*i;
+		void	*v;
+	} buf;
+
 	int		i;
 	dheader_t	header;
 	int		length;
@@ -688,6 +713,7 @@ void CM_LoadMap( const char *name, qboolean clientload, int *checksum )
 	cm_noCurves = Cvar_Get ("cm_noCurves", "0", CVAR_CHEAT);
 	cm_playerCurveClip = Cvar_Get ("cm_playerCurveClip", "1", CVAR_ARCHIVE|CVAR_CHEAT );
 #endif
+
 	Com_DPrintf( "CM_LoadMap( %s, %i )\n", name, clientload );
 
 	if ( !strcmp( cm.name, name ) && clientload )
@@ -714,20 +740,20 @@ void CM_LoadMap( const char *name, qboolean clientload, int *checksum )
 	// load the file
 	//
 #ifndef BSPC
-	length = FS_ReadFile( name, (void **)&buf );
+	length = FS_ReadFile( name, &buf.v );
 #else
-	length = LoadQuakeFile((quakefile_t *) name, (void **)&buf);
+	length = LoadQuakeFile((quakefile_t *) name, &buf.v );
 #endif
 
-	if ( !buf )
+	if ( !buf.i )
 	{
 		Com_Error (ERR_DROP, "Couldn't load %s", name);
 	}
 
-	last_checksum = LittleLong (Com_BlockChecksum (buf, length));
+	last_checksum = LittleLong (Com_BlockChecksum (buf.i, length));
 	*checksum = last_checksum;
 
-	header = *(dheader_t *)buf;
+	header = *(dheader_t *)buf.i;
 
 	for (i=0 ; i<sizeof(dheader_t)/4 ; i++)
 	{
@@ -740,7 +766,7 @@ void CM_LoadMap( const char *name, qboolean clientload, int *checksum )
 		, name, header.version, BSP_VERSION );
 	}
 
-	cmod_base = (byte *)buf;
+	cmod_base = (byte *)buf.i;
 
 	// load into heap
 	CMod_LoadShaders( &header.lumps[LUMP_SHADERS] );
@@ -757,7 +783,7 @@ void CM_LoadMap( const char *name, qboolean clientload, int *checksum )
 	CMod_LoadPatches( &header.lumps[LUMP_SURFACES], &header.lumps[LUMP_DRAWVERTS] );
 
 	// we are NOT freeing the file, because it is cached for the ref
-	FS_FreeFile (buf);
+	FS_FreeFile (buf.v);
 
 	CM_InitBoxHull ();
 
@@ -826,6 +852,7 @@ clipHandle_t CM_InlineModel( int index )
 	{
 		Com_Error (ERR_DROP, "CM_InlineModel: bad number");
 	}
+
 	return index;
 }
 
@@ -900,7 +927,7 @@ void CM_InitBoxHull (void)
 
 		// brush sides
 		s = &cm.brushsides[cm.numBrushSides+i];
-		s->plane =	cm.planes + (cm.numPlanes+i*2+side);
+		s->plane = cm.planes + (cm.numPlanes+i*2+side);
 		s->surfaceFlags = 0;
 
 		// planes

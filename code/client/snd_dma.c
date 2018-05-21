@@ -93,10 +93,10 @@ int		s_rawend[MAX_RAW_STREAMS];
 portable_samplepair_t s_rawsamples[MAX_RAW_STREAMS][MAX_RAW_SAMPLES];
 
 
+
 // ====================================================================
 // User-setable variables
 // ====================================================================
-
 
 void S_Base_SoundInfo(void)
 {	
@@ -182,6 +182,7 @@ void S_Base_SoundList( void )
 	strcpy(mem[0], "paged out");
 	strcpy(mem[1], "resident ");
 	total = 0;
+
 	for (sfx=s_knownSfx, i=0 ; i<s_numSfx ; i++, sfx++)
 	{
 		size = sfx->soundLength;
@@ -297,6 +298,12 @@ static sfx_t *S_FindName( const char *name )
 		Com_Error (ERR_FATAL, "Sound name too long: %s", name);
 	}
 
+	if (name[0] == '*')
+	{
+		Com_Printf(S_COLOR_YELLOW "WARNING: Tried to load player sound directly: %s \n", name);
+		return NULL;
+	}
+
 	hash = S_HashSFXName(name);
 
 	sfx = sfxHash[hash];
@@ -389,7 +396,8 @@ sfxHandle_t S_Base_RegisterSound( const char *name, qboolean compressed )
 		return 0;
 	}
 
-	if ( strlen( name ) >= MAX_QPATH ) {
+	if ( strlen( name ) >= MAX_QPATH )
+	{
 		Com_Printf( "Sound name exceeds MAX_QPATH\n" );
 		return 0;
 	}
@@ -398,7 +406,8 @@ sfxHandle_t S_Base_RegisterSound( const char *name, qboolean compressed )
 
 	if ( sfx->soundData )
 	{
-		if ( sfx->defaultSound ) {
+		if ( sfx->defaultSound )
+		{
 			Com_Printf( S_COLOR_YELLOW "WARNING: could not find %s - using default\n", sfx->soundName );
 			return 0;
 		}
@@ -411,7 +420,8 @@ sfxHandle_t S_Base_RegisterSound( const char *name, qboolean compressed )
 
 	S_memoryLoad(sfx);
 
-	if ( sfx->defaultSound ) {
+	if ( sfx->defaultSound )
+	{
 		Com_Printf( S_COLOR_YELLOW "WARNING: could not find %s - using default\n", sfx->soundName );
 		return 0;
 	}
@@ -435,7 +445,7 @@ void S_Base_BeginRegistration( void )
 
 		s_numSfx = 0;
 		Com_Memset( s_knownSfx, 0, sizeof( s_knownSfx ) );
-		Com_Memset(sfxHash, 0, sizeof(sfx_t *)*LOOP_HASH);
+		Com_Memset(sfxHash, 0, sizeof(sfx_t *) * LOOP_HASH);
 
 #ifdef OPEN_ARENA
 		S_Base_RegisterSound("sound/misc/silence.wav", qfalse);
@@ -492,7 +502,7 @@ void S_SpatializeOrigin (vec3_t origin, int master_vol, int *left_vol, int *righ
 	dot = -vec[1];
 
 	if (dma.channels == 1)
-	{ // no attenuation = no spatialization
+	{	// no attenuation = no spatialization
 		rscale = 1.0;
 		lscale = 1.0;
 	}
@@ -550,7 +560,7 @@ void S_Base_StartSound(vec3_t origin, int entityNum, int entchannel, sfxHandle_t
 		return;
 	}
 
-	if ( !origin && ( entityNum < 0 || entityNum > MAX_GENTITIES ) )
+	if ( !origin && ( entityNum < 0 || entityNum >= MAX_GENTITIES ) )
 	{
 		Com_Error( ERR_DROP, "S_StartSound: bad entitynum %i", entityNum );
 	}
@@ -800,7 +810,6 @@ void S_Base_ClearLoopingSounds( qboolean killall )
 	{
 		if (killall || loopSounds[i].kill == qtrue || (loopSounds[i].sfx && loopSounds[i].sfx->soundLength == 0))
 		{
-			//loopSounds[i].kill = qfalse; // fix redundant - Cowcat
 			S_Base_StopLoopingSound(i);
 		}
 	}
@@ -852,7 +861,7 @@ void S_Base_AddLoopingSound( int entityNum, const vec3_t origin, const vec3_t ve
 	loopSounds[entityNum].dopplerScale = 1.0;
 	loopSounds[entityNum].sfx = sfx;
 
-	if (s_doppler->integer && VectorLengthSquared(velocity)>0.0)
+	if ( s_doppler->integer && VectorLengthSquared(velocity) > 0.0 )
 	{
 		vec3_t	out;
 		float	lena, lenb;
@@ -874,12 +883,12 @@ void S_Base_AddLoopingSound( int entityNum, const vec3_t origin, const vec3_t ve
 
 		loopSounds[entityNum].dopplerScale = lenb/(lena*100);
 
-		if (loopSounds[entityNum].dopplerScale<=1.0)
+		if (loopSounds[entityNum].dopplerScale <= 1.0)
 		{
 			loopSounds[entityNum].doppler = qfalse;		// don't bother doing the math
 		}
 
-		else if (loopSounds[entityNum].dopplerScale>MAX_DOPPLER_SCALE)
+		else if (loopSounds[entityNum].dopplerScale > MAX_DOPPLER_SCALE)
 		{
 			loopSounds[entityNum].dopplerScale = MAX_DOPPLER_SCALE;
 		}
@@ -1030,7 +1039,7 @@ void S_AddLoopSounds (void)
 		ch->oldDopplerScale = loop->oldDopplerScale;
 		numLoopChannels++;
 
-		if (numLoopChannels == MAX_CHANNELS)
+		if (numLoopChannels >= MAX_CHANNELS)
 		{
 			return;
 		}
@@ -1038,37 +1047,6 @@ void S_AddLoopSounds (void)
 }
 
 //=============================================================================
-
-/*
-=================
-S_ByteSwapRawSamples
-
-If raw data has been loaded in little endien binary form, this must be done.
-If raw data was calculated, as with ADPCM, this should not be called.
-=================
-*/
-#if 0 // not used - Cowcat
-void S_ByteSwapRawSamples( int samples, int width, int s_channels, const byte *data )
-{
-	int	i;
-
-	if ( width != 2 ) {
-		return;
-	}
-
-	if ( LittleShort( 256 ) == 256 ) {
-		return;
-	}
-
-	if ( s_channels == 2 ) {
-		samples <<= 1;
-	}
-
-	for ( i = 0 ; i < samples ; i++ ) {
-		((short *)data)[i] = LittleShort( ((short *)data)[i] );
-	}
-}
-#endif
 
 /*
 ============
@@ -1079,11 +1057,11 @@ Music streaming
 */
 void S_Base_RawSamples( int stream, int samples, int rate, int width, int s_channels, const byte *data, float volume )
 {
-	int	i;
-	int	src, dst;
-	float	scale;
-	int	intVolume;
-	portable_samplepair_t *rawsamples;
+	int			i;
+	int			src, dst;
+	float			scale;
+	int			intVolume;
+	portable_samplepair_t 	*rawsamples;
 
 	if ( !s_soundStarted || s_soundMuted )
 	{
@@ -1120,6 +1098,7 @@ void S_Base_RawSamples( int stream, int samples, int rate, int width, int s_chan
 				s_rawend[stream]++;
 				rawsamples[dst].left = ((short *)data)[i*2] * intVolume;
 				rawsamples[dst].right = ((short *)data)[i*2+1] * intVolume;
+				
 			}
 		}
 
@@ -1209,7 +1188,7 @@ let the sound system know where an entity currently is
 */
 void S_Base_UpdateEntityPosition( int entityNum, const vec3_t origin )
 {
-	if ( entityNum < 0 || entityNum > MAX_GENTITIES )
+	if ( entityNum < 0 || entityNum >= MAX_GENTITIES )
 	{
 		Com_Error( ERR_DROP, "S_UpdateEntityPosition: bad entitynum %i", entityNum );
 	}
@@ -1406,7 +1385,7 @@ void S_GetSoundtime(void)
 	s_soundtime = buffers*fullsamples + samplepos/dma.channels;
 
 #if 0
-// check to make sure that we haven't overshot
+	// check to make sure that we haven't overshot
 	if (s_paintedtime < s_soundtime)
 	{
 		Com_DPrintf ("S_Update_ : overflow\n");
@@ -1430,10 +1409,10 @@ void S_Update_(void)
 {
 	unsigned	endtime;
 	int		samps;
-	static		float	lastTime = 0.0f;
+	static float	lastTime = 0.0f;
 	float		ma, op;
 	float		thisTime, sane;
-	static		int ot = -1;
+	static int	ot = -1;
 
 	if ( !s_soundStarted || s_soundMuted )
 	{
@@ -1449,6 +1428,7 @@ void S_Update_(void)
 	{
 		return;
 	}
+
 	ot = s_soundtime;
 
 	// clear any sound effects that end before the current time,
@@ -1457,13 +1437,13 @@ void S_Update_(void)
 
 	sane = thisTime - lastTime;
 
-	if (sane<11)
+	if (sane < 11)
 	{
 		sane = 11;		// 85hz
 	}
 
 	ma = s_mixahead->value * dma.speed;
-	op = s_mixPreStep->value + sane*dma.speed*0.01;
+	op = s_mixPreStep->value + sane * dma.speed * 0.01;
 
 	if (op < ma)
 	{
@@ -1515,6 +1495,31 @@ void S_Base_StopBackgroundTrack( void )
 	s_rawend[0] = 0;
 }
 
+static void S_OpenBackgroundStream( const char *filename )
+{
+	// close the background track, but DON'T reset s_rawend
+	// if restarting the same back ground track
+	if(s_backgroundStream)
+	{
+		S_CodecCloseStream(s_backgroundStream);
+		s_backgroundStream = NULL;
+	}
+
+	// Open stream
+	s_backgroundStream = S_CodecOpenStream( filename );
+
+	if(!s_backgroundStream)
+	{
+		Com_Printf( S_COLOR_YELLOW "WARNING: couldn't open music file %s\n", filename );
+		return;
+	}
+
+	if(s_backgroundStream->info.channels != 2 || s_backgroundStream->info.rate != 22050)
+	{
+		Com_Printf(S_COLOR_YELLOW "WARNING: music file %s is not 22k stereo\n", filename );
+	}
+}
+
 /*
 ======================
 S_StartBackgroundTrack
@@ -1534,42 +1539,15 @@ void S_Base_StartBackgroundTrack( const char *intro, const char *loop )
 
 	Com_DPrintf( "S_StartBackgroundTrack( %s, %s )\n", intro, loop );
 
-	if ( !intro[0] )
+	if ( !*intro )
 	{
+		S_Base_StopBackgroundTrack();
 		return;
 	}
 
-	if( !loop )
-	{
-		s_backgroundLoop[0] = 0;
-	}
+	Q_strncpyz( s_backgroundLoop, loop, sizeof( s_backgroundLoop ) );
 
-	else
-	{
-		Q_strncpyz( s_backgroundLoop, loop, sizeof( s_backgroundLoop ) );
-	}
-
-	// close the background track, but DON'T reset s_rawend
-	// if restarting the same back ground track
-	if(s_backgroundStream)
-	{
-		S_CodecCloseStream(s_backgroundStream);
-		s_backgroundStream = NULL;
-	}
-
-	// Open stream
-	s_backgroundStream = S_CodecOpenStream(intro);
-
-	if(!s_backgroundStream)
-	{
-		Com_Printf( S_COLOR_YELLOW "WARNING: couldn't open music file %s\n", intro );
-		return;
-	}
-
-	if(s_backgroundStream->info.channels != 2 || s_backgroundStream->info.rate != 22050)
-	{
-		Com_Printf(S_COLOR_YELLOW "WARNING: music file %s is not 22k stereo\n", intro );
-	}
+	S_OpenBackgroundStream( intro );
 }
 
 /*
@@ -1584,12 +1562,14 @@ void S_UpdateBackgroundTrack( void )
 	byte		raw[30000];	// just enough to fit in a mac stack frame
 	int		fileBytes;
 	int		r;
-	static	float	musicVolume = 0.5f;
+	//static float	musicVolume = 0.5f;
 
 	if(!s_backgroundStream)
 	{
 		return;
 	}
+
+	#if 0
 
 	// graeme see if this is OK
 	musicVolume = (musicVolume + (s_musicVolume->value * 2))/4.0f;
@@ -1600,18 +1580,31 @@ void S_UpdateBackgroundTrack( void )
 		return;
 	}
 
+	#else // test - Cowcat
+
+	// don't bother playing anything if musicvolume is 0
+	if ( s_musicVolume->value <= 0 )
+	{
+		return;
+	}
+
+	#endif
+	
 	// see how many samples should be copied into the raw buffer
 	if ( s_rawend[0] < s_soundtime )
 	{
 		s_rawend[0] = s_soundtime;
 	}
-
+	
 	while ( s_rawend[0] < s_soundtime + MAX_RAW_SAMPLES )
 	{
 		bufferSamples = MAX_RAW_SAMPLES - (s_rawend[0] - s_soundtime);
 
 		// decide how much data needs to be read from the file
 		fileSamples = bufferSamples * s_backgroundStream->info.rate / dma.speed;
+
+		if(!fileSamples)
+			return;
 
 		// our max buffer size
 		fileBytes = fileSamples * (s_backgroundStream->info.width * s_backgroundStream->info.channels);
@@ -1627,7 +1620,6 @@ void S_UpdateBackgroundTrack( void )
 
 		if(r < fileBytes)
 		{
-			fileBytes = r;
 			fileSamples = r / (s_backgroundStream->info.width * s_backgroundStream->info.channels);
 		}
 
@@ -1635,7 +1627,7 @@ void S_UpdateBackgroundTrack( void )
 		{
 			// add to raw buffer
 			S_Base_RawSamples( 0, fileSamples, s_backgroundStream->info.rate,
-				s_backgroundStream->info.width, s_backgroundStream->info.channels, raw, musicVolume );
+				s_backgroundStream->info.width, s_backgroundStream->info.channels, raw, s_musicVolume->value );
 		}
 
 		else
@@ -1643,9 +1635,7 @@ void S_UpdateBackgroundTrack( void )
 			// loop
 			if(s_backgroundLoop[0])
 			{
-				S_CodecCloseStream(s_backgroundStream);
-				s_backgroundStream = NULL;
-				S_Base_StartBackgroundTrack( s_backgroundLoop, s_backgroundLoop );
+				S_OpenBackgroundStream ( s_backgroundLoop );
 
 				if(!s_backgroundStream)
 					return;
@@ -1717,8 +1707,10 @@ void S_Base_Shutdown( void )
 	}
 
 	SNDDMA_Shutdown();
+	SND_shutdown();
 
 	s_soundStarted = 0;
+	s_numSfx = 0;
 
 	Cmd_RemoveCommand("s_info");
 }

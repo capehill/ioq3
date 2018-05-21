@@ -150,7 +150,7 @@ qboolean ReadNumber(source_t *source, fielddef_t *fd, void *p)
 		} //end if
 		if (intval < intmin || intval > intmax)
 		{
-			SourceError(source, "value %d out of range [%d, %d]", intval, intmin, intmax);
+			SourceError(source, "value %ld out of range [%ld, %ld]", intval, intmin, intmax);
 			return 0;
 		} //end if
 	} //end if
@@ -160,7 +160,7 @@ qboolean ReadNumber(source_t *source, fielddef_t *fd, void *p)
 		{
 			if (intval < fd->floatmin || intval > fd->floatmax)
 			{
-				SourceError(source, "value %d out of range [%f, %f]", intval, fd->floatmin, fd->floatmax);
+				SourceError(source, "value %ld out of range [%f, %f]", intval, fd->floatmin, fd->floatmax);
 				return 0;
 			} //end if
 		} //end if
@@ -221,7 +221,7 @@ int ReadString(source_t *source, fielddef_t *fd, void *p)
 	//remove the double quotes
 	StripDoubleQuotes(token.string);
 	//copy the string
-	strncpy((char *) p, token.string, MAX_STRINGFIELD);
+	strncpy((char *) p, token.string, MAX_STRINGFIELD-1);
 	//make sure the string is closed with a zero
 	((char *)p)[MAX_STRINGFIELD-1] = '\0';
 	//
@@ -346,7 +346,7 @@ int WriteFloat(FILE *fp, float value)
 	char buf[128];
 	int l;
 
-	sprintf(buf, "%f", value);
+	Com_sprintf(buf, sizeof(buf), "%f", value);
 	l = strlen(buf);
 	//strip any trailing zeros
 	while(l-- > 1)

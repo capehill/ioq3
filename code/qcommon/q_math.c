@@ -167,30 +167,25 @@ float Q_crandom( int *seed )
 
 signed char ClampChar( int i )
 {
-	if ( i < -128 ) {
+	if ( i < -128 )
 		return -128;
-	}
 
-	if ( i > 127 ) {
+	if ( i > 127 )
 		return 127;
-	}
 
 	return i;
 }
 
 signed short ClampShort( int i )
 {
-	if ( i < -32768 ) {
+	if ( i < -32768 )
 		return -32768;
-	}
 
-	if ( i > 0x7fff ) {
+	if ( i > 0x7fff )
 		return 0x7fff;
-	}
 
 	return i;
 }
-
 
 // this isn't a real cheap function to call!
 int DirToByte( vec3_t dir )
@@ -198,9 +193,8 @@ int DirToByte( vec3_t dir )
 	int	i, best;
 	float	d, bestd;
 
-	if ( !dir ) {
+	if ( !dir )
 		return 0;
-	}
 
 	bestd = 0;
 	best = 0;
@@ -221,7 +215,8 @@ int DirToByte( vec3_t dir )
 
 void ByteToDir( int b, vec3_t dir )
 {
-	if ( b < 0 || b >= NUMVERTEXNORMALS ) {
+	if ( b < 0 || b >= NUMVERTEXNORMALS )
+	{
 		VectorCopy( vec3_origin, dir );
 		return;
 	}
@@ -259,17 +254,17 @@ float NormalizeColor( const vec3_t in, vec3_t out )
 	
 	max = in[0];
 
-	if ( in[1] > max ) {
+	if ( in[1] > max )
 		max = in[1];
-	}
 
-	if ( in[2] > max ) {
+	if ( in[2] > max )
 		max = in[2];
-	}
 
-	if ( !max ) {
+	if ( !max )
 		VectorClear( out );
-	} else {
+
+	else
+	{
 		out[0] = in[0] / max;
 		out[1] = in[1] / max;
 		out[2] = in[2] / max;
@@ -295,9 +290,8 @@ qboolean PlaneFromPoints( vec4_t plane, const vec3_t a, const vec3_t b, const ve
 	VectorSubtract( c, a, d2 );
 	CrossProduct( d2, d1, plane );
 
-	if ( VectorNormalize( plane ) == 0 ) {
+	if ( VectorNormalize( plane ) == 0 )
 		return qfalse;
-	}
 
 	plane[3] = DotProduct( a, plane );
 	return qtrue;
@@ -311,6 +305,7 @@ This is not implemented very well...
 ===============
 */
 
+#if 1
 void RotatePointAroundVector( vec3_t dst, const vec3_t dir, const vec3_t point, float degrees )
 {
 	float	m[3][3];
@@ -321,6 +316,7 @@ void RotatePointAroundVector( vec3_t dst, const vec3_t dir, const vec3_t point, 
 	int	i;
 	vec3_t 	vr, vup, vf;
 	float	rad;
+	float	s, c; // Cowcat
 
 	vf[0] = dir[0];
 	vf[1] = dir[1];
@@ -368,7 +364,6 @@ void RotatePointAroundVector( vec3_t dst, const vec3_t dir, const vec3_t point, 
 
 	#else // Cowcat
 
-	float s, c;
 	rad = ( DEG2RAD( degrees ) );
 	s = sin(rad);
 	c = cos(rad);
@@ -396,6 +391,35 @@ void RotatePointAroundVector( vec3_t dst, const vec3_t dir, const vec3_t point, 
 	}
 }
 
+#else
+
+void RotatePointAroundVector( vec3_t dst, const vec3_t dir, const vec3_t point, float degrees )
+{
+	float	m[3][3];
+	float	c, s, t;
+
+	degrees = -DEG2RAD( degrees );
+	s = sin (degrees);
+	c = cos (degrees);
+	t = 1 - c;
+
+	m[0][0] = t * dir[0] * dir[0] + c;
+	m[0][1] = t * dir[0] * dir[1] + s * dir[2];
+	m[0][2] = t * dir[0] * dir[2] - s * dir[1];
+
+	m[1][0] = t * dir[0] * dir[1] - s * dir[2];
+	m[1][1] = t * dir[1] * dir[1] + c;
+	m[1][2] = t * dir[1] * dir[2] + s * dir[0];
+
+	m[2][0] = t * dir[0] * dir[2] + s * dir[1];
+	m[2][1] = t * dir[1] * dir[2] - s * dir[0];
+	m[2][2] = t * dir[2] * dir[2] + c;
+
+	VectorRotate( point, m, dst );
+}
+
+#endif
+	
 /*
 ===============
 RotateAroundDirection
@@ -568,6 +592,8 @@ void VectorRotate( vec3_t in, vec3_t matrix[3], vec3_t out )
 
 //============================================================================
 
+
+
 #if !idppc
 
 /*
@@ -581,7 +607,7 @@ float __asm_frsqrte(__reg("f1") float) = "\tfrsqrte\t1,1";
 
 float Q_rsqrt( float number )
 {
-	#ifdef AMIGAMaybe// Cowcat
+	#ifdef AMIGAmaybe // Cowcat
 
 	float x = 0.5f * number;
 	float y;
@@ -619,8 +645,8 @@ float Q_fabs( float f )
 	fi.i &= 0x7FFFFFFF;
 	return fi.f;
 }
-
 #endif
+
 
 //============================================================
 
@@ -759,124 +785,7 @@ void SetPlaneSignbits (cplane_t *out)
 }
 
 
-/*
-==================
-BoxOnPlaneSide
-
-Returns 1, 2, or 1 + 2
-
-// this is the slow, general version
-int BoxOnPlaneSide2 (vec3_t emins, vec3_t emaxs, struct cplane_s *p)
-{
-	int	i;
-	float	dist1, dist2;
-	int	sides;
-	vec3_t	corners[2];
-
-	for (i=0 ; i<3 ; i++)
-	{
-		if (p->normal[i] < 0)
-		{
-			corners[0][i] = emins[i];
-			corners[1][i] = emaxs[i];
-		}
-
-		else
-		{
-			corners[1][i] = emins[i];
-			corners[0][i] = emaxs[i];
-		}
-	}
-
-	dist1 = DotProduct (p->normal, corners[0]) - p->dist;
-	dist2 = DotProduct (p->normal, corners[1]) - p->dist;
-	sides = 0;
-
-	if (dist1 >= 0)
-		sides = 1;
-
-	if (dist2 < 0)
-		sides |= 2;
-
-	return sides;
-}
-
-==================
-*/
-
 #if !id386
-
-#if 0
-
-int BoxOnPlaneSide (vec3_t emins, vec3_t emaxs, struct cplane_s *p)
-{
-	float	dist1, dist2;
-	int	sides;
-
-	// fast axial cases
-	if (p->type < 3)
-	{
-		if (p->dist <= emins[p->type])
-			return 1;
-
-		if (p->dist >= emaxs[p->type])
-			return 2;
-
-		return 3;
-	}
-
-	// general case
-	switch (p->signbits)
-	{
-	case 0:
-		dist1 = p->normal[0]*emaxs[0] + p->normal[1]*emaxs[1] + p->normal[2]*emaxs[2];
-		dist2 = p->normal[0]*emins[0] + p->normal[1]*emins[1] + p->normal[2]*emins[2];
-		break;
-	case 1:
-		dist1 = p->normal[0]*emins[0] + p->normal[1]*emaxs[1] + p->normal[2]*emaxs[2];
-		dist2 = p->normal[0]*emaxs[0] + p->normal[1]*emins[1] + p->normal[2]*emins[2];
-		break;
-	case 2:
-		dist1 = p->normal[0]*emaxs[0] + p->normal[1]*emins[1] + p->normal[2]*emaxs[2];
-		dist2 = p->normal[0]*emins[0] + p->normal[1]*emaxs[1] + p->normal[2]*emins[2];
-		break;
-	case 3:
-		dist1 = p->normal[0]*emins[0] + p->normal[1]*emins[1] + p->normal[2]*emaxs[2];
-		dist2 = p->normal[0]*emaxs[0] + p->normal[1]*emaxs[1] + p->normal[2]*emins[2];
-		break;
-	case 4:
-		dist1 = p->normal[0]*emaxs[0] + p->normal[1]*emaxs[1] + p->normal[2]*emins[2];
-		dist2 = p->normal[0]*emins[0] + p->normal[1]*emins[1] + p->normal[2]*emaxs[2];
-		break;
-	case 5:
-		dist1 = p->normal[0]*emins[0] + p->normal[1]*emaxs[1] + p->normal[2]*emins[2];
-		dist2 = p->normal[0]*emaxs[0] + p->normal[1]*emins[1] + p->normal[2]*emaxs[2];
-		break;
-	case 6:
-		dist1 = p->normal[0]*emaxs[0] + p->normal[1]*emins[1] + p->normal[2]*emins[2];
-		dist2 = p->normal[0]*emins[0] + p->normal[1]*emaxs[1] + p->normal[2]*emaxs[2];
-		break;
-	case 7:
-		dist1 = p->normal[0]*emins[0] + p->normal[1]*emins[1] + p->normal[2]*emins[2];
-		dist2 = p->normal[0]*emaxs[0] + p->normal[1]*emaxs[1] + p->normal[2]*emaxs[2];
-		break;
-	default:
-		dist1 = dist2 = 0;		// shut up compiler
-		break;
-	}
-
-	sides = 0;
-
-	if (dist1 >= p->dist)
-		sides = 1;
-
-	if (dist2 < p->dist)
-		sides |= 2;
-
-	return sides;
-}
-
-#else // new ioquake sources - Cowcat
 
 int BoxOnPlaneSide (vec3_t emins, vec3_t emaxs, struct cplane_s *p)
 {
@@ -920,7 +829,6 @@ int BoxOnPlaneSide (vec3_t emins, vec3_t emaxs, struct cplane_s *p)
 
 #endif
 
-#endif
 /*
 =================
 RadiusFromBounds
@@ -1295,6 +1203,12 @@ vec_t DistanceSquared( const vec3_t p1, const vec3_t p2 )
 
 // fast vector normalize routine that does not check to make sure
 // that length != 0, nor does it return length, uses rsqrt approximation
+
+//extern void VectorNormalizeFast (vec3_t v);
+
+#if 1
+#if 1
+
 void VectorNormalizeFast( vec3_t v )
 {
 	float ilength;
@@ -1305,6 +1219,30 @@ void VectorNormalizeFast( vec3_t v )
 	v[1] *= ilength;
 	v[2] *= ilength;
 }
+
+#else
+
+float __rsqrt(__reg("f1") float, __reg("f5") float) =
+	"\tfrsqrte\t0,1\n"
+	"\tfmsubs\t2,5,1,1\n"										
+	"\tfmuls\t4,0,0\n"		
+	"\tfnmsubs\t3,2,4,5\n"	
+	"\tfmuls\t1,3,0";
+
+#define rsqrt(x) __rsqrt(x, 1.5)
+
+void VectorNormalizeFast( vec3_t v )
+{
+	float ilength;
+
+	ilength = rsqrt( DotProduct( v, v ) );
+
+	v[0] *= ilength;
+	v[1] *= ilength;
+	v[2] *= ilength;
+}
+#endif
+#endif
 
 void VectorInverse( vec3_t v )
 {
@@ -1321,3 +1259,4 @@ void CrossProduct( const vec3_t v1, const vec3_t v2, vec3_t cross )
 }
 
 #endif
+
