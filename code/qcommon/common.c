@@ -1410,6 +1410,8 @@ void Com_TouchMemory( void ) {
 
 	end = Sys_Milliseconds();
 
+	(void)sum; // Suppress warning
+
 	Com_Printf( "Com_TouchMemory: %i msec\n", end - start );
 }
 
@@ -1523,6 +1525,8 @@ void Hunk_SmallLog( void) {
 #ifdef HUNK_DEBUG
 		Com_sprintf(buf, sizeof(buf), "size = %8d: %s, line: %d (%s)\r\n", locsize, block->file, block->line, block->label);
 		FS_Write(buf, strlen(buf), logfile);
+#else
+		(void)locsize; // Suppress warning
 #endif
 		size += block->size;
 		numBlocks++;
@@ -2276,7 +2280,7 @@ Just throw a fatal error to
 test error shutdown procedures
 =============
 */
-static void __attribute__((__noreturn__)) Com_Error_f (void) {
+static void Q_NO_RETURN Com_Error_f (void) {
 	if ( Cmd_Argc() > 1 ) {
 		Com_Error( ERR_DROP, "Testing drop error" );
 	} else {
@@ -2468,7 +2472,7 @@ void Com_ReadCDKey( const char *filename ) {
 
 	Com_sprintf(fbuffer, sizeof(fbuffer), "%s/q3key", filename);
 
-	FS_SV_FOpenFileRead( fbuffer, &f );
+	FS_BaseDir_FOpenFileRead( fbuffer, &f );
 	if ( !f ) {
 		Com_Memset( cl_cdkey, '\0', 17 );
 		return;
@@ -2498,7 +2502,7 @@ void Com_AppendCDKey( const char *filename ) {
 
 	Com_sprintf(fbuffer, sizeof(fbuffer), "%s/q3key", filename);
 
-	FS_SV_FOpenFileRead( fbuffer, &f );
+	FS_BaseDir_FOpenFileRead( fbuffer, &f );
 	if (!f) {
 		Com_Memset( &cl_cdkey[16], '\0', 17 );
 		return;
@@ -2543,7 +2547,7 @@ static void Com_WriteCDKey( const char *filename, const char *ikey ) {
 #ifndef _WIN32
 	savedumask = umask(0077);
 #endif
-	f = FS_SV_FOpenFileWrite( fbuffer );
+	f = FS_BaseDir_FOpenFileWrite( fbuffer );
 	if ( !f ) {
 		Com_Printf ("Couldn't write CD key to %s.\n", fbuffer );
 		goto out;
@@ -2574,7 +2578,7 @@ static void Com_DetectAltivec(void)
 		static qboolean altivec = qfalse;
 		static qboolean detected = qfalse;
 		if (!detected) {
-			altivec = ( Sys_GetProcessorFeatures( ) & CF_ALTIVEC );
+			altivec = !!( Sys_GetProcessorFeatures( ) & CF_ALTIVEC );
 			detected = qtrue;
 		}
 

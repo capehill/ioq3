@@ -36,7 +36,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #endif
 
 #ifndef DEDICATED
-#ifdef USE_LOCAL_HEADERS
+#ifdef USE_INTERNAL_SDL_HEADERS
 #	include "SDL.h"
 #	include "SDL_cpuinfo.h"
 #else
@@ -288,7 +288,7 @@ Sys_Exit
 Single exit point (regular exit or in case of error)
 =================
 */
-static __attribute__ ((noreturn)) void Sys_Exit( int exitCode )
+static Q_NO_RETURN void Sys_Exit( int exitCode )
 {
 	CON_Shutdown( );
 
@@ -457,7 +457,7 @@ void Sys_Error( const char *error, ... )
 Sys_Warn
 =================
 */
-static __attribute__ ((format (printf, 1, 2))) void Sys_Warn( char *warning, ... )
+static Q_PRINTF_FUNC(1, 2) void Sys_Warn( char *warning, ... )
 {
 	va_list argptr;
 	char    string[1024];
@@ -728,7 +728,9 @@ char *Sys_ParseProtocolUri( const char *uri )
 #endif
 
 #ifndef DEFAULT_BASEDIR
-#	ifdef __APPLE__
+#	if defined(DEFAULT_RELATIVE_BASEDIR)
+#		define DEFAULT_BASEDIR Sys_BinaryPathRelative(DEFAULT_RELATIVE_BASEDIR)
+#	elif defined(__APPLE__)
 #		define DEFAULT_BASEDIR Sys_StripAppBundle(Sys_BinaryPath())
 #	else
 #		define DEFAULT_BASEDIR Sys_BinaryPath()
@@ -804,7 +806,7 @@ int main( int argc, char **argv )
 	{
 		Sys_Dialog( DT_ERROR, va( "SDL version " MINSDL_VERSION " or greater is required, "
 			"but only version %d.%d.%d was found. You may be able to obtain a more recent copy "
-			"from http://www.libsdl.org/.", ver.major, ver.minor, ver.patch ), "SDL Library Too Old" );
+			"from https://www.libsdl.org/.", ver.major, ver.minor, ver.patch ), "SDL Library Too Old" );
 
 		Sys_Exit( 1 );
 	}
