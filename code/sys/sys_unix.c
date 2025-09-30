@@ -54,6 +54,8 @@ Sys_DefaultHomePath
 #ifdef __amigaos4__
 char *Sys_DefaultHomePath(void)
 {
+	static char homePath[ MAX_OSPATH ] = { 0 };
+
 	return homePath;
 }
 #else
@@ -313,7 +315,7 @@ Sys_Mkfifo
 FILE *Sys_Mkfifo( const char *ospath )
 {
 #ifdef __amigaos4__
-#warning "implement"
+    #warning "implement Sys_Mkfifo"
 	Com_Printf("Sys_Mkfifo missing\n");
 	return NULL;
 #else
@@ -606,6 +608,11 @@ void Sys_Sleep( int msec )
 	}
 	else
 	{
+#ifdef __amigaos4__
+        #warning implement Sys_Sleep
+        //    usleep(msec * 1000);
+	Com_Printf("Sys_Exec missing\n");
+#else
 		struct timespec req;
 
 		// With nothing to select() on, we can't wait indefinitely
@@ -615,6 +622,7 @@ void Sys_Sleep( int msec )
 		req.tv_sec = msec/1000;
 		req.tv_nsec = (msec%1000)*1000000;
 		nanosleep(&req, NULL);
+#endif
 	}
 }
 
@@ -722,7 +730,7 @@ Sys_Exec
 static int Sys_Exec( void )
 {
 #ifdef __amigaos4__
-#warning "implement"
+#warning "implement Sys_Exec"
 	Com_Printf("Sys_Exec missing\n");
 	return -1;
 #else
@@ -932,7 +940,7 @@ void Sys_GLimpInit( void )
 void Sys_SetFloatEnv(void)
 {
 #ifdef __amigaos4__
-#warning "implement"
+    #warning "implement Sys_SetFloatEnv"
 	Com_Printf("Sys_SetFloatEnv missing\n");
 #else
 	// rounding toward nearest
@@ -987,7 +995,7 @@ void Sys_SetEnv(const char *name, const char *value)
 	if(value && *value)
 		setenv(name, value, 1);
 #ifdef __amigaos4__
-#warning "implement"
+    #warning "implement Sys_SetEnv"
 	else
 		Com_Printf("Sys_SetEnv missing\n");
 #else

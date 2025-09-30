@@ -978,10 +978,8 @@ else # ifeq sunos
 ifeq ($(PLATFORM),AMIGAOS)
 
   CC=gcc
-  BASE_CFLAGS = -Wall -fno-strict-aliasing -Wimplicit -Wstrict-prototypes # -DUSE_ICON
+  BASE_CFLAGS = -Wall -fno-strict-aliasing -Wimplicit -Wstrict-prototypes -gstabs # -DUSE_ICON
   CLIENT_CFLAGS += -I/SDK/local/newlib/include/SDL2 #$(SDL_CFLAGS)
-
-  BASE_CFLAGS=
 
   OPTIMIZEVM = -O3 -funroll-loops
 
@@ -993,7 +991,7 @@ ifeq ($(PLATFORM),AMIGAOS)
   SHLIBCFLAGS=-fPIC
   SHLIBLDFLAGS=-shared
 
-  LIBS=-use-dynld -lSDL2 #-lauto
+  LIBS=-use-dynld -lSDL2 -athread=native #-lauto
 
   PASSIVE_CON=true
 
@@ -2014,8 +2012,13 @@ ifeq ($(PLATFORM),emscripten)
   Q3OBJ += \
     $(B)/client/con_passive.o
 else
+ifeq ($(PLATFORM),AMIGAOS)
+  Q3OBJ += \
+    $(B)/client/con_passive.o
+else
   Q3OBJ += \
     $(B)/client/con_tty.o
+endif
 endif
 endif
 
@@ -2404,7 +2407,7 @@ ifeq ($(HAVE_VM_COMPILED),true)
       $(B)/client/vm_x86.o
   endif
   ifneq ($(findstring $(ARCH),ppc ppc64),)
-    Q3OBJ += $(B)/client/vm_powerpc.o $(B)/client/vm_powerpc_asm.o
+    Q3OBJ += $(B)/client/vm_powerpc.o #$(B)/client/vm_powerpc_asm.o
   endif
   ifeq ($(ARCH),sparc)
     Q3OBJ += $(B)/client/vm_sparc.o

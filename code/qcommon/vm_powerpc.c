@@ -28,6 +28,11 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include <sys/types.h> /* needed by sys/mman.h on OSX */
 #ifdef __amigaos4__
 #include <proto/exec.h>
+
+#ifdef UNUSED
+#undef UNUSED
+#endif
+
 #else
 #include <sys/mman.h>
 #endif
