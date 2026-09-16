@@ -12,6 +12,9 @@
 The intent of this project is to provide a baseline engine which may be used
 for further development and to play _Quake 3: Arena,_ _Team Arena,_ and mods.
 
+Our source code is at https://github.com/ioquake/ioq3 
+If you aren't there, then this isn't ioquake3, it's someone else's project.
+
 Some of the major features currently implemented are:
 
   * CMake meta-build system
@@ -34,6 +37,7 @@ Some of the major features currently implemented are:
     is stored in "%APPDATA%\Quake3")
   * PNG support
   * Web support via Emscripten
+  * console scaling with con_scale
   * Many, many bug fixes
 
 The map editor and associated compiling tools are not included. We suggest you
@@ -43,12 +47,26 @@ The original id software readme that accompanied the Q3 source release has been
 renamed to id-readme.txt so as to prevent confusion. Please refer to the
 website for updated status.
 
-More documentation including a Player's Guide and Sysadmin Guide are on:
-https://ioquake3.org/help/
+## Just want to play ioquake3?
+Check out our Player's Guide here:
+https://ioquake3.org/help/players-guide/
 
+## Want to run a server?
+Our SysAdmin guide is here:
+https://ioquake3.org/help/sys-admin-guide/
+
+## Visit our forums
 If you've got issues that you aren't sure are worth filing as bugs, or just
-want to chat, please visit our forums:
+want to chat:
 https://discourse.ioquake.org
+
+## I'm going to fork ioquake3 and do my own thing!
+Please update your fork's README.md to credit the ioquake3 project and inform users
+what project they're looking at so you get credit for your work. 
+
+Feel free to make a thread on our forums to let people know about
+your project. We're looking forward to hearing about it.
+
 
 # Thank You:
 
@@ -79,6 +97,9 @@ https://discourse.ioquake.org
 **Note that for all of these platforms, if you want to play _Quake 3: Arena_ or 
 the expansion pack, _Team Arena_, you'll still need to buy a copy of the game.**
 The _Quake 3_ game source code is freely available under the GPLv2, not the game data.
+
+You can get links to buy and support the project here: https://ioquake3.org/buy/
+
 
 You can make your own mod that either requires the original game data or a new game  
 that does not. Please read the **Creating standalone games** section for more information
@@ -193,6 +214,31 @@ set using command line arguments:
     ioquake3 +set cl_renderer opengl2 +set r_preferOpenGLES 1
 
 
+# Filesystem
+
+Compared to the original release, user configuration and data files are stored
+in more modern locations. If you want a different behaviour a specific path
+can be provided by adding `+set fs_homepath <path>` to the command line.
+
+### Windows
+
+`C:\Users\<username>\AppData\Roaming\Quake3`
+
+### macOS
+
+`/Users/<username>/Library/Application Support/Quake3`
+
+### Linux
+
+`/home/<username>/.config/Quake3` Configuration files.
+`/home/<username>/.local/share/Quake3` Data files (pk3s etc.).
+`/home/<username>/.local/state/Quake3` Other internal runtime files.
+
+These directories correspond to the Free Desktop XDG Base Directory
+Specification. The original release used `/home/.q3a`. This will be used if
+present, however in this case a prompt will be shown suggesting migration to
+the above locations, if desired.
+
 # Console
 
 ## New cvars
@@ -214,6 +260,11 @@ set using command line arguments:
                                       at the beginning
   con_autoclear                     - Set to 0 to disable clearing console
                                       input text when console is closed
+  con_scale                         - Scales console text to make it legible at
+                                      high resolutions. Defaults to 1. Maximum
+                                      is 4. Accepts fractional values (1.5).
+  con_notifylines                   - The number of lines to display in the
+                                      notify area
 
   in_joystickUseAnalog              - Do not translate joystick axis events
                                       to keyboard commands
@@ -471,9 +522,8 @@ binary must not detect any original quake3 game pak files. If this
 condition is met, the game will set com_standalone to 1 and is then running
 in stand alone mode.
 
-If you want the engine to use a different directory in your homepath than
-e.g. "Quake3" on Windows or ".q3a" on Linux, then set a new name at startup
-by adding
+If you want the engine to use a different directory in your homepaths than
+"Quake3" then set a new name at startup by adding
 
     +set com_homepath <homedirname>
 
@@ -487,7 +537,7 @@ matching game name.
 
 Example line:
 
-    +set com_basegame basefoo +set com_homepath .foo
+    +set com_basegame basefoo +set com_homepath foo
     +set com_gamename foo
 
 If you really changed parts that would make vanilla ioquake3 incompatible with

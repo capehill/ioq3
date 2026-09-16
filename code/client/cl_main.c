@@ -742,7 +742,7 @@ void CL_Record_f( void ) {
 #endif
 				Com_sprintf(name, sizeof(name), "demos/%s.%s%d", demoName, DEMOEXT, com_protocol->integer);
 
-			if (!FS_FileExists(name))
+			if (!FS_FileExists_HomeData(name))
 				break;	// file doesn't exist
 		}
 	}
@@ -750,7 +750,7 @@ void CL_Record_f( void ) {
 	// open the demo file
 
 	Com_Printf ("recording to %s.\n", name);
-	clc.demofile = FS_FOpenFileWrite( name );
+	clc.demofile = FS_FOpenFileWrite_HomeData( name );
 	if ( !clc.demofile ) {
 		Com_Printf ("ERROR: couldn't open.\n");
 		return;
@@ -903,7 +903,7 @@ void CL_DemoCompleted( void )
 				else
 					numFrames = clc.timeDemoFrames - 1;
 
-				f = FS_FOpenFileWrite( cl_timedemoLog->string );
+				f = FS_FOpenFileWrite_HomeData( cl_timedemoLog->string );
 				if( f )
 				{
 					FS_Printf( f, "# %s", buffer );
@@ -1052,10 +1052,10 @@ static void CL_CompleteDemoName( char *args, int argNum )
 {
 	if( argNum == 2 )
 	{
-		char demoExt[ 16 ];
+		char demoFilter[ 16 ];
 
-		Com_sprintf(demoExt, sizeof(demoExt), ".%s%d", DEMOEXT, com_protocol->integer);
-		Field_CompleteFilename( "demos", demoExt, qtrue, qtrue );
+		Com_sprintf( demoFilter, sizeof(demoFilter), "*.%s*", DEMOEXT );
+		Field_CompleteFilename( "demos", "", demoFilter, qfalse, qtrue );
 	}
 }
 
@@ -2197,7 +2197,7 @@ static void CL_BeginHttpDownload( const char *remoteURL ) {
 	CL_HTTP_BeginDownload(remoteURL);
 	Q_strncpyz(clc.downloadURL, remoteURL, sizeof(clc.downloadURL));
 
-	clc.download = FS_BaseDir_FOpenFileWrite(clc.downloadTempName);
+	clc.download = FS_BaseDir_FOpenFileWrite_HomeData(clc.downloadTempName);
 	if(!clc.download) {
 		Com_Error(ERR_DROP, "CL_BeginHTTPDownload: failed to open "
 			"%s for writing", clc.downloadTempName);
@@ -2233,7 +2233,7 @@ void CL_NextDownload(void)
 	// A download has finished, check whether this matches a referenced checksum
 	if(*clc.downloadName)
 	{
-		char *zippath = FS_BaseDir_BuildOSPath(Cvar_VariableString("fs_homepath"), clc.downloadName);
+		char *zippath = FS_BaseDir_BuildOSPath(Cvar_VariableString("fs_homedatapath"), clc.downloadName);
 
 		if(!FS_CompareZipChecksum(zippath))
 			Com_Error(ERR_DROP, "Incorrect checksum for file: %s", clc.downloadName);
@@ -2977,7 +2977,7 @@ void CL_Frame ( int msec ) {
 				clc.download = 0;
 			}
 
-			FS_BaseDir_Rename(clc.downloadTempName, clc.downloadName, qfalse);
+			FS_BaseDir_Rename_HomeData(clc.downloadTempName, clc.downloadName, qfalse);
 			clc.downloadRestart = qtrue;
 			CL_NextDownload();
 		}
@@ -3175,7 +3175,7 @@ void CL_InitRenderer( void ) {
 	cls.charSetShader = re.RegisterShader( "gfx/2d/bigchars" );
 	cls.whiteShader = re.RegisterShader( "white" );
 	cls.consoleShader = re.RegisterShader( "console" );
-	g_console_field_width = cls.glconfig.vidWidth / SMALLCHAR_WIDTH - 2;
+	g_console_field_width = cls.glconfig.vidWidth / g_smallchar_width - 2;
 	g_consoleField.widthInChars = g_console_field_width;
 }
 
@@ -3307,7 +3307,7 @@ void CL_InitRef( void ) {
 	ri.FS_FreeFileList = FS_FreeFileList;
 	ri.FS_ListFiles = FS_ListFiles;
 	ri.FS_FileIsInPAK = FS_FileIsInPAK;
-	ri.FS_FileExists = FS_FileExists;
+	ri.FS_FileExists = FS_FileExists_HomeData;
 	ri.Cvar_Get = Cvar_Get;
 	ri.Cvar_Set = Cvar_Set;
 	ri.Cvar_SetValue = Cvar_SetValue;
@@ -3418,7 +3418,7 @@ void CL_Video_f( void )
       Com_sprintf( filename, MAX_OSPATH, "videos/video%d%d%d%d.avi",
           a, b, c, d );
 
-      if( !FS_FileExists( filename ) )
+      if( !FS_FileExists_HomeData( filename ) )
         break; // file doesn't exist
     }
 
@@ -3471,7 +3471,7 @@ static void CL_GenerateQKey(void)
 		Com_Printf( "QKEY building random string\n" );
 		Com_RandomBytes( buff, sizeof(buff) );
 
-		f = FS_BaseDir_FOpenFileWrite( QKEY_FILE );
+		f = FS_BaseDir_FOpenFileWrite_HomeState( QKEY_FILE );
 		if( !f ) {
 			Com_Printf( "QKEY could not open %s for write\n",
 				QKEY_FILE );
@@ -3833,7 +3833,7 @@ static void CL_SetServerInfo(serverInfo_t *server, const char *info, int ping) {
 	if (server) {
 		if (info) {
 			server->clients = atoi(Info_ValueForKey(info, "clients"));
-			Q_strncpyz(server->hostName,Info_ValueForKey(info, "hostname"), MAX_NAME_LENGTH);
+			Q_strncpyz(server->hostName,Info_ValueForKey(info, "hostname"), MAX_HOSTNAME_LENGTH);
 			Q_strncpyz(server->mapName, Info_ValueForKey(info, "mapname"), MAX_NAME_LENGTH);
 			server->maxClients = atoi(Info_ValueForKey(info, "sv_maxclients"));
 			Q_strncpyz(server->game,Info_ValueForKey(info, "game"), MAX_NAME_LENGTH);
@@ -4719,26 +4719,23 @@ qboolean CL_CDKeyValidate( const char *key, const char *checksum ) {
 	// for loop gets rid of conditional assignment warning
 	for (i = 0; i < len; i++) {
 		ch = *key++;
-		if (ch>='a' && ch<='z') {
-			ch -= 32;
-		}
-		switch( ch ) {
+		switch(tolower(ch)) {
 		case '2':
 		case '3':
 		case '7':
-		case 'A':
-		case 'B':
-		case 'C':
-		case 'D':
-		case 'G':
-		case 'H':
-		case 'J':
-		case 'L':
-		case 'P':
-		case 'R':
-		case 'S':
-		case 'T':
-		case 'W':
+		case 'a':
+		case 'b':
+		case 'c':
+		case 'd':
+		case 'g':
+		case 'h':
+		case 'j':
+		case 'l':
+		case 'p':
+		case 'r':
+		case 's':
+		case 't':
+		case 'w':
 			sum += ch;
 			continue;
 		default:

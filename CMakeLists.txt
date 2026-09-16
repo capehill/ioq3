@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.25)
-cmake_policy(VERSION 3.31)
+
+if(POLICY CMP0177)
+    # Policy CMP0177: install() DESTINATION paths are normalized
+    # Introduced in CMake 3.31
+    cmake_policy(SET CMP0177 NEW)
+endif()
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 include(identity)
@@ -37,6 +42,14 @@ if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
+# Try to enable LTO by default
+include(CheckIPOSupported)
+check_ipo_supported(RESULT IPO_SUPPORTED)
+if(IPO_SUPPORTED)
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_DEBUG FALSE)
+endif()
+
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_SHARED_LIBRARY_PREFIX "")
@@ -46,14 +59,23 @@ if(NOT PRODUCT_VERSION)
 
     if(EXISTS "${CMAKE_SOURCE_DIR}/.git")
         execute_process(
-            COMMAND git show -s --pretty=format:%h
+            COMMAND git describe --tags --exact-match
             WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-            OUTPUT_VARIABLE GIT_REV
+            OUTPUT_VARIABLE GIT_TAG
             OUTPUT_STRIP_TRAILING_WHITESPACE
             ERROR_QUIET)
 
-        if(GIT_REV)
-            set(PRODUCT_VERSION "${PRODUCT_VERSION}_g${GIT_REV}")
+        if(NOT GIT_TAG STREQUAL "${PRODUCT_VERSION}")
+            execute_process(
+                COMMAND git show -s --pretty=format:%h
+                WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+                OUTPUT_VARIABLE GIT_REV
+                OUTPUT_STRIP_TRAILING_WHITESPACE
+                ERROR_QUIET)
+
+            if(GIT_REV)
+                set(PRODUCT_VERSION "${PRODUCT_VERSION}_g${GIT_REV}")
+            endif()
         endif()
     endif()
 endif()

@@ -185,10 +185,10 @@ Sys_PIDFileName
 */
 static char *Sys_PIDFileName( const char *gamedir )
 {
-	const char *homePath = Cvar_VariableString( "fs_homepath" );
+	const char *homeStatePath = Cvar_VariableString( "fs_homestatepath" );
 
-	if( *homePath != '\0' )
-		return va( "%s/%s/%s", homePath, gamedir, PID_FILENAME );
+	if( *homeStatePath != '\0' )
+		return va( "%s/%s/%s", homeStatePath, gamedir, PID_FILENAME );
 
 	return NULL;
 }
@@ -283,6 +283,22 @@ void Sys_InitPIDFile( const char *gamedir ) {
 
 /*
 =================
+Sys_OpenFolderInFileManager
+=================
+*/
+qboolean Sys_OpenFolderInFileManager( const char *path, qboolean create )
+{
+	if( create )
+	{
+		if( FS_CreatePath( path ) )
+			return qfalse;
+	}
+
+	return Sys_OpenFolderInPlatformFileManager( path );
+}
+
+/*
+=================
 Sys_Exit
 
 Single exit point (regular exit or in case of error)
@@ -365,7 +381,7 @@ void Sys_AnsiColorPrint( const char *msg )
 	int         length = 0;
 	static int  q3ToAnsi[ 8 ] =
 	{
-		30, // COLOR_BLACK
+		7, // COLOR_BLACK
 		31, // COLOR_RED
 		32, // COLOR_GREEN
 		33, // COLOR_YELLOW
@@ -395,8 +411,8 @@ void Sys_AnsiColorPrint( const char *msg )
 			}
 			else
 			{
-				// Print the color code
-				Com_sprintf( buffer, sizeof( buffer ), "\033[%dm",
+				// Print the color code (reset first to clear potential inverse (black))
+				Com_sprintf( buffer, sizeof( buffer ), "\033[0m\033[%dm",
 						q3ToAnsi[ ColorIndex( *( msg + 1 ) ) ] );
 				fputs( buffer, stderr );
 				msg += 2;
@@ -781,8 +797,9 @@ int main( int argc, char **argv )
 	char *protocolCommand = NULL;
 #endif
 
-	extern void Sys_LaunchAutoupdater(int argc, char **argv);
+#ifdef USE_AUTOUPDATER
 	Sys_LaunchAutoupdater(argc, argv);
+#endif
 
 #ifndef DEDICATED
 	// SDL version check
@@ -813,6 +830,7 @@ int main( int argc, char **argv )
 #endif
 
 	Sys_PlatformInit( );
+	Sys_SetMaxFileLimit( );
 
 	// Set the initial time base
 	Sys_Milliseconds( );
@@ -887,4 +905,3 @@ int main( int argc, char **argv )
 
 	return 0;
 }
-
