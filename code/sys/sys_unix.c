@@ -90,6 +90,11 @@ Sys_Exec
 */
 static int Sys_Exec( void )
 {
+#ifdef __amigaos4__
+    #warning "implement Sys_Exec"
+    Com_Printf("Sys_Exec not implemented\n");
+    return -1;
+#else
 	pid_t pid = fork( );
 
 	if( pid < 0 )
@@ -114,6 +119,7 @@ static int Sys_Exec( void )
 
 		return -1;
 	}
+#endif
 }
 
 #ifdef __APPLE__
